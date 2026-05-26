@@ -1,0 +1,11 @@
+name: slae
+
+# Architecture SLAE (Spatial Laplace Autoencoder)
+N: 128
+latent_dim: 64
+beta: 1.0e-2
+freq_L: 8
+
+# Fréquences de Laplace (contour de Bromwich)
+K: 16           # nombre de fréquences de Laplace
+gamma_init: 0.0 # amortissement γ du contour

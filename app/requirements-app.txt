@@ -1,0 +1,6 @@
+torch>=2.0
+numpy
+streamlit>=1.30
+plotly
+Pillow
+matplotlib

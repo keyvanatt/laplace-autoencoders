@@ -1,0 +1,4 @@
+ckpt_path: checkpoints/SLAEModel__slae_ld64_K16_g0.0__t4h2.pt
+n_gifs: 3
+out_dir: plots/
+k_max: null  # override k_max for inference (null = use checkpoint value)

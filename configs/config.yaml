@@ -1,0 +1,14 @@
+defaults:
+  - model: slae
+  - training: ae
+  - data: combustion
+  - eval: default
+  - _self_
+
+seed: 42
+project: convdiff
+save_dir: checkpoints
+
+hydra:
+  run:
+    dir: .

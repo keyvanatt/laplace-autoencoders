@@ -1,0 +1,13 @@
+# Hyperparamètres pour le CorrectionAE UNet (train_correction.py)
+epochs: 100
+batch_size: 64
+lr: 1.0e-3
+patience: 15
+
+# UNet
+base_ch: 16
+lambda_grad: 10.0
+
+# Pré-calcul des memmaps
+kt: 20           # frames aléatoires par simulation
+surrogate_ckpt: checkpoints/SLAEModel_finetuned.pt
