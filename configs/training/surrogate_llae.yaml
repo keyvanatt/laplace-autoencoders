@@ -1,0 +1,16 @@
+# Hyperparamètres pour la phase surrogate LLAE (train_surrogate.py model=llae)
+epochs: 300
+batch_size: 16
+lr_surrogate: 3.0e-4
+lr_decoder: 5.0e-5
+patience: 40
+
+# Architecture du surrogate (overridable depuis model/)
+shared_dim: 256
+head_dim: 128
+n_trunk: 4
+n_head: 2
+freq_L: 6
+
+# Checkpoint AE LLAE à charger
+ae_ckpt: checkpoints/llae_best.pt

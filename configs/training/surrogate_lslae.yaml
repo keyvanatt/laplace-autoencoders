@@ -1,0 +1,26 @@
+# Hyperparamètres pour la phase surrogate LSLAE (train_surrogate.py model=lslae training=surrogate_lslae)
+epochs: 300
+batch_size: 16
+patience: 40
+
+# Taux d'apprentissage différentiels (proj / decoder / base SVD V)
+lr_proj:    5.0e-4
+lr_decoder: 5.0e-5
+lr_V:       5.0e-4
+
+# SVD
+k_svd: 16           # modes SVD retenus (doit correspondre à model.k_svd)
+alpha_lat: 1.0      # poids de la loss latente vs spatiale
+
+# Architecture du surrogate trunk+heads (overridable)
+shared_dim: 256
+head_dim: 128
+n_trunk: 4
+n_head: 2
+freq_L: 6
+
+# Taille de batch pour l'encodage offline (phase 2)
+encode_batch_size: 32
+
+# Checkpoint AE LLAE à charger
+ae_ckpt: checkpoints/llae_best.pt

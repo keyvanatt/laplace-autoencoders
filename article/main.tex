@@ -1,0 +1,444 @@
+\documentclass[a4paper,12pt,leqno]{article}
+\usepackage{amsthm}
+
+\usepackage{amssymb,amsmath,amsfonts}
+\usepackage[a4paper,margin=2cm]{geometry}
+
+\usepackage{newcent}
+\usepackage[scaled=1.1]{newtxmath}
+\newtheorem{definition}{Definition}[section]  
+\newtheorem{proposition}{Proposition}[section]  
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\usepackage{subcaption}
+\usepackage{float}      % pour [H]
+\usepackage{booktabs}   % pour \toprule, \midrule, \bottomrule
+
+%% ---------- Macros ----------
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\lift}{\ell}
+\newcommand{\Ch}{\mathrm{Ch}}
+\newcommand{\DAG}{\mathrm{DAG}}
+\DeclareMathOperator{\Var}{Var}
+
+\def\bfC{\mathbf{C}}
+
+\usepackage{graphicx}
+\usepackage{bm}
+\usepackage{parskip}
+\usepackage[toc,page]{appendix}
+\graphicspath{ {./images/} }
+\usepackage[dvipsnames]{xcolor}
+\everymath{\displaystyle}
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage[pdfencoding=auto]{hyperref}
+
+\newcommand{\vmu}{\bm{\mu}}
+\newcommand{\R}{\mathbb{R}}
+
+\title{Model order reduction for a transient reaction-diffusion problem using the Laplace transform}
+\author{Keyvan Attarian\footnote{Ecole polytechnique, Institut polytechnique de Paris},
+Amine Ammar\footnote{ENSAM}}
+\date{Printed \today}
+
+\begin{document}
+
+\maketitle
+
+\setcounter{tocdepth}{1}
+
+\begin{abstract}
+Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models, combined with a lightweight UNet residual corrector to mitigate spectral truncation artifacts, significantly improves prediction accuracy. Ultimately, the AE-based methods bridge the gap between fast surrogate predictions and the autoencoder reconstruction floor, establishing a highly efficient and accurate framework for transient PDE emulation.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+High-fidelity simulations of parametric transient partial differential equations (PDEs), such as those governing combustion, reactive transport, and atmospheric dispersion, rely on computationally expensive numerical solvers. In many-query contexts like optimization, uncertainty quantification, real-time control, and digital twins, the complete spatiotemporal field $U(x, t; \vmu)$ must be evaluated for thousands of parameter values $\vmu$ \cite{giacomini2026,mallick2025}. The prohibitive cost of these repeated evaluations motivates the development of surrogate models capable of reproducing the full dynamics in milliseconds. Applications such as air quality and pollution forecasting concretely illustrate this need: global physical models are accurate but unusable in real-time without approximation \cite{guo2022,fan2025}.
+
+Classical model order reduction (MOR) methods \cite{hesthaven2015}, such as Reduced Basis (RB) and Proper Orthogonal Decomposition (POD) combined with interpolation, construct a low-dimensional linear subspace by projecting high-fidelity solutions onto spatial modes. These approaches are theoretically well-founded and highly effective for smooth dynamics. However, they suffer from a reconstruction floor linked to the linearity of the basis: for problems with sharp transients, localized structures, or strongly non-linear dynamics (such as convection-diffusion-reaction equations), the number of required modes explodes. The treatment of time in these methods is either sequential (time-stepping on the projected ROM) or space-time (variational), both of which impose a computational cost that grows with the temporal horizon \cite{glas2017,lassila2014,iliescu2025}. The transition toward non-linear manifolds becomes necessary as linear techniques struggle \cite{fresca2021}. Our results confirm this limitation: a linear SVD baseline in the Laplace domain reaches 100\% relative error on our test case.
+
+To overcome the linear floor, two main families of data-driven approaches have emerged alongside the advent of Physics-Informed Neural Networks \cite{raissi2019}. On one hand, deep learning-based ROMs (DL-ROMs) \cite{lee2020, fresca2021} jointly learn a non-linear manifold and reduced dynamics via convolutional autoencoders, demonstrating significant gains over linear ROMs for parametric non-linear PDEs. On the other hand, neural operators directly learn mappings between function spaces (i.e., field-to-field mappings). Notable examples include DeepONet \cite{lu2021deeponet} and its POD-based extensions \cite{lu2022pod}, and the Fourier Neural Operator (FNO) \cite{li2021fno}, which employs convolution in the Fourier space. Because they are inherently designed to map an input function to an output function, they are not naturally suited for direct parameter-to-field predictions where the input is a low-dimensional scalar vector. Furthermore, these approaches treat time as an additional continuous dimension, imposing a high memory and computational cost for long sequences and limiting their ability to capture long-horizon transients without dense training data. Parameter-conditioned U-Nets \cite{kastor2026} represent a lighter alternative for 2D convection-diffusion-reaction PDEs, yet they still operate directly in the time domain.
+
+Spectral decompositions offer an alternative perspective for transient PDEs. FNO \cite{li2021fno} parameterizes the integral kernel directly in the Fourier space, giving it remarkable efficiency on periodic or quasi-stationary problems. However, the Fourier transform implicitly assumes periodicity and is poorly suited for transient signals: it struggles to represent the natural exponential growth or decay of solutions and suffers from Gibbs artifacts in the presence of temporal discontinuities. The Laplace transform $s = \gamma + i\omega$ generalizes Fourier by adding a real decay axis $\gamma$ that naturally encodes transients, exponential stability, and non-periodic regimes. Each frequency field $\hat{U}(s_k)$ is a static complex spatial field, structurally simpler to compress than an entire temporal sequence. The Laplace Neural Operator (LNO) \cite{cao2023} illustrates this advantage: by exploiting the pole-residual relationship in the Laplace domain, LNO surpasses FNO on transient responses and non-periodic signals for benchmark ODEs and PDEs. Regarding linear reduction, recent works exploit the Laplace domain to construct reduced bases: Reyes \cite{reyes2025} shows via the Paley-Wiener theorem that the Laplace domain produces exponentially accurate POD bases for evolution problems, and Goeckner et al. \cite{goeckner2022} extend this to parametric PDEs via contour integral methods. Nonetheless, these approaches remain fundamentally linear. The remaining gap is to replace this linear compression with non-linear autoencoders jointly learned with a parametric surrogate, enabling end-to-end differentiable training thanks to the exact invertibility of the transform \cite{guglielmi2020}.
+
+This paper proposes a surrogate modeling strategy for parametric transient PDEs that exploits the Laplace transform as a spectral compression tool for the spatiotemporal field, combined with non-linear autoencoders. Two strategies are systematically compared: compression in the spatial domain frequency-by-frequency (SLAE), and compression in the temporal latent space prior to transformation (LLAE/LSLAE). End-to-end training is made possible by the differentiability of the inversion operator. A lightweight UNet residual corrector addresses Gibbs artifacts stemming from spectral truncation. Our contributions are threefold: (1) Formulation and comparison of two AE architectures in the Laplace domain (SLAE vs LLAE/LSLAE); (2) Demonstration that end-to-end training is indispensable for bridging the gap between the reconstruction floor and the surrogate prediction; (3) Introduction of a differentiable UNet residual corrector for mitigating spectral artifacts.
+
+The remainder of this paper is organized as follows. Section 2 describes the methodology, detailing the Laplace transform, surrogate architectures, and the end-to-end training pipeline. Section 3 presents the numerical results and performance comparisons. Finally, Section 4 provides a discussion and concludes the work. The appendices detail the governing equations and architectural hyperparameters.
+
+\section{Methodology}
+
+\subsection{Laplace Transform and Inversion}
+
+The forward Laplace transform is evaluated at discrete frequencies $s = \gamma + i\omega$ using a temporal quadrature rule (e.g., trapezoidal rule with weights $w_n$):
+\begin{equation}
+    \hat{U}(s) = \int_0^T U(t)\,e^{-s t}\,\mathrm{d}t \approx \Delta t \sum_{n=0}^{N_t-1} w_n\, U(t_n)\, e^{-s t_n}
+\end{equation}
+Since the physical temporal field $U(t)$ is strictly real-valued, its Laplace transform satisfies the conjugate symmetry property $\hat{U}(\bar{s}) = \overline{\hat{U}(s)}$, where $\bar{s} = \gamma - i\omega$. Consequently, we restrict our numerical evaluation to frequencies with non-negative imaginary parts, $s_k = \gamma + i\omega_k$ with $\omega_k \ge 0$ for $k \in \{0, \dots, N_l\}$. This symmetry effectively doubles the number of available frequency fields for a given computational cost, reducing the forward evaluation overhead by a factor of two while providing the full spectral information required for inversion.
+
+To recover the temporal field $U(t)$ from this reduced frequency set, we consider two inversion methods:
+
+\textbf{Regularised Inversion (Tikhonov).} For an arbitrary set of frequencies $s_k$, the inversion is ill-posed. Let $\bm{F} \in \C^{N \times N_t}$ be the forward evaluation matrix mapping the real temporal sequence to the complex frequency domain, such that $\bm{F}_{k,n} = \Delta t \, w_n \, e^{-s_k t_n}$. Let $\hat{\bm{u}} \in \C^N$ and $\bm{u} \in \R^{N_t}$ be the flattened vectors corresponding to the frequency predictions $\hat{U}(s_k)$ and the temporal field $U(t_n)$, respectively. Taking advantage of the real-valued constraint on $\bm{u}$, we formulate the reconstruction as a regularised complex least-squares problem restricted to the non-negative frequency spectrum:
+\begin{equation}
+    \bm{u}^* = \arg\min_{\bm{u} \in \R^{N_t}} \left\| \bm{F}\bm{u} - \hat{\bm{u}} \right\|_{\C^N}^2 + \alpha_t \left\| \bm{D}_t \bm{u} \right\|_2^2 + \lambda \left\| \bm{u} \right\|_2^2
+\end{equation}
+where $\bm{D}_t \in \R^{(N_t-1)\times N_t}$ is the first-difference operator penalising temporal roughness, and $\lambda > 0$ is a Tikhonov ridge regularisation parameter. The corresponding optimality condition (normal equations) yields a real symmetric linear system:
+\begin{equation}
+    \left( \Re(\bm{F}^H \bm{F}) + \alpha_t \bm{D}_t^T \bm{D}_t + \lambda \bm{I} \right) \bm{u}^* = \Re(\bm{F}^H \hat{\bm{u}})
+\end{equation}
+By solving this system, the conjugate frequencies are implicitly accounted for through the real-part operator $\Re(\cdot)$, ensuring a physically consistent, real-valued temporal reconstruction. Since this Tikhonov regularised numerical inversion is implemented via a linear least-squares solve (e.g., using \texttt{torch.linalg.solve}), the inversion operator is fully differentiable. This approach is well-suited for gradient-based training and arbitrary frequency selections.
+
+\textbf{Bromwich Contour (Special Case).} When the frequencies $s_k = \gamma + i\omega_k$ are uniformly spaced along a vertical line in the complex plane such that $\omega_k$ corresponds to the discrete Fourier frequencies, the forward transform can be formulated as a Discrete Fourier Transform (DFT) of the exponentially damped sequence:
+\begin{equation}
+    \hat{U}(s_k) = \text{FFT} \left\{ U(t_n) \Delta t \, w_n e^{-\gamma t_n} \right\}_k
+\end{equation}
+The inverse transform is then efficiently and exactly computed using the Inverse Fast Fourier Transform (IFFT), without the need for regularisation:
+\begin{equation}
+    U(t_n) = \frac{e^{\gamma t_n}}{\Delta t \, w_n} \Re \left( \text{IFFT} \left\{ \hat{U}(s_k) \right\}_n \right)
+\end{equation}
+
+\subsection{SVD Baseline in the Laplace Domain}
+
+A linear baseline approach applies a truncated Singular Value Decomposition (SVD) independently to each Laplace frequency $s_k$. The complex spatial field $\hat{U}(s_k)$ is separated into its real and imaginary components, which are then projected onto pre-computed, fixed spatial bases $\bm{V}^{(k,r)}$ and $\bm{V}^{(k,i)}$:
+\begin{equation}
+    \Re(\hat{U}(s_k)) \approx \sum_{j=1}^{k_{\mathrm{svd}}} c_j^{(k,r)} \bm{V}_j^{(k,r)}, \qquad \Im(\hat{U}(s_k)) \approx \sum_{j=1}^{k_{\mathrm{svd}}} c_j^{(k,i)} \bm{V}_j^{(k,i)}
+\end{equation}
+For each frequency $k$, dedicated Multilayer Perceptrons (MLPs), parameterized by weights $\bm{\theta}$, act as surrogates to predict the normalised coefficients $\bm{c}^{(k,r)}$ and $\bm{c}^{(k,i)}$ directly from the physical parameters $\vmu$. Specifically, independent MLPs are employed for the real and imaginary parts, governed by the following mappings:
+\begin{equation}
+    \bm{c}^{(k,r)} = f_{\bm{\theta}}^{(k,r)}(\vmu), \quad \bm{c}^{(k,i)} = f_{\bm{\theta}}^{(k,i)}(\vmu)
+\end{equation}
+where $f_{\bm{\theta}}$ denotes the parametrized neural network function. These MLPs are trained to minimize the mean squared error (MSE) between the predicted and true SVD projection coefficients:
+\begin{equation}
+    \mathcal{L}_{\mathrm{SVD}}^{(k)} = \left\| f_{\bm{\theta}}^{(k,r)}(\vmu) - \bm{c}^{(k,r)} \right\|_2^2 + \left\| f_{\bm{\theta}}^{(k,i)}(\vmu) - \bm{c}^{(k,i)} \right\|_2^2
+\end{equation}
+The time series $U(t)$ is subsequently reconstructed by multiplying the predicted coefficients with their respective bases, combining them into a complex field, and applying the inverse Laplace transform. However, this approach is fundamentally constrained by the irreducible truncation error of the linear spatial bases, particularly at higher frequencies where the spatial modes exhibit complex, highly localized structures.
+
+\subsection{Autoencoders in the Laplace Domain}
+
+To design non-linear reduced-order models, we investigate and compare two alternative autoencoder (AE) strategies:
+\begin{itemize}
+    \item \textbf{Spatial Laplace AE (SLAE):} The Laplace transform is computed in the physical domain, and a frequency-conditioned autoencoder compresses and reconstructs each complex frequency frame independently.
+    \item \textbf{Latent Laplace AE (LLAE):} A time-conditioned autoencoder first compresses the physical time-series frames into a low-dimensional latent space, and the Laplace transform is subsequently applied to the temporal latent codes.
+\end{itemize}
+In both configurations, we incorporate an $L_2$ ``ridge'' regularization penalty on the latent representations. This constraint is crucial as it enforces a sufficiently regular and smooth latent space structure, which subsequently makes it much easier for the surrogate model to learn the mapping from the physical parameters $\vmu$ to the latent codes $z$ (as detailed in Section~\ref{sec:surrogate}).
+
+Both architectures share common conditioning components: a sinusoidal coordinate encoding and Feature-wise Linear Modulation (FiLM). Below, we describe these mechanisms in a general manner using a coordinate $\tau \in [0,1]$ that represents either the frequency ratio $f_k = k/(N_{\mathrm{half}}-1)$ in the spatial approach, or the normalised time step $t/T$ in the latent approach.
+
+\paragraph{Sinusoidal coordinate encoding.}
+The coordinate $\tau \in [0,1]$ is embedded via sinusoidal basis functions inspired by NeRF positional encoding \cite{mildenhall2020nerf}:
+\begin{equation}
+    \bm{e}(\tau) = \mathrm{MLP}\Bigl(\bigl[\sin(2^i\pi \tau),\; \cos(2^i\pi \tau)\bigr]_{i=0}^{L-1}\Bigr), \qquad L = 8.
+    \label{eq:posenc}
+\end{equation}
+A plain scalar $\tau$ would conflate nearby coordinates and fail to capture sharp transitions in either the frequency or time domains. The multi-scale sinusoidal basis explicitly represents $\tau$ at $L$ different resolutions, providing the network with a rich, non-saturating signal that allows fine discrimination across the entire range.
+
+\paragraph{FiLM conditioning.}
+To share encoder/decoder weights across all coordinates (frequencies or time steps) while adapting to each specific configuration, the FiLM mechanism \cite{perez2018film} is employed. At each convolutional layer $\ell$, the coordinate embedding $\bm{e}(\tau)$ is projected to a channel-wise gain $\alpha_\ell \in \R^{C_\ell}$ and bias $\delta_\ell \in \R^{C_\ell}$, modulating the activations element-wise:
+\begin{equation}
+    \bm{x}_\ell \;\leftarrow\; \bigl(\bm{x}_\ell \odot (1 + \alpha_\ell(\bm{e}(\tau)))\bigr) \;+\; \delta_\ell(\bm{e}(\tau)).
+    \label{eq:film}
+\end{equation}
+The residual formulation $(1 + \alpha_\ell)$ initialises the modulation close to the identity, which stabilises early training. All coordinates share the same convolutional weights, and the FiLM parameters act as a lightweight per-coordinate adapter at each layer, enabling a single autoencoder to process the full spectrum or temporal sequence without training separate model copies.
+\subsubsection{Spatial Laplace AE (SLAE)}
+In SLAE, the Laplace transform operates directly on the time-domain spatial pixels, transforming the sequence of 2D grids $U(t)$ into $K$ complex-valued frequency frames $\hat{U}(s_k)$. A frequency-conditioned encoder (utilizing 3 strided convolutional downsampling blocks with LeakyReLU activations and FiLM) compresses each 2-channel (Real and Imaginary) frame independently into a real latent vector $z(s_k) \in \R^{d_z}$:
+\begin{equation}
+    U(t) \xrightarrow{\mathcal{L}_{\text{pixel-wise}}} \hat{U}(s_k) \xrightarrow{\text{Encoder}(f_k)} z(s_k) \xrightarrow{\text{Decoder}(f_k)} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\text{rec}}(t)
+\end{equation}
+The corresponding decoder upsamples $z(s_k)$ via transposed convolutions. To prevent cross-talk between the real and imaginary components during the final projection, the decoder bifurcates into two separate refinement blocks (each consisting of successive convolutions with kernel sizes of 3 and 1), outputting the complex channels independently. The spatial autoencoder is trained by minimizing a loss function comprising the spatial reconstruction error in the Laplace domain and $L_2$ regularization on the latent representations:
+\begin{equation}
+    \mathcal{L}_{\mathrm{SLAE}} = \left\| \tilde{U}(s_k) - \hat{U}(s_k) \right\|_{\C^N}^2 + \beta \left\| z(s_k) \right\|_2^2
+\end{equation}
+where $\| \cdot \|_{\C^N}^2$ represents the combined squared $L_2$ norm of the real and imaginary parts of the spatial grid, and $\beta$ is a regularisation hyperparameter.
+
+\subsubsection{Latent Laplace AE (LLAE)}
+Alternatively, LLAE applies the transform within the low-dimensional latent space. The single-channel physical fields $U(t)$ are first encoded frame-by-frame by a similar convolutional encoder into latent codes $z(t) \in \R^{d_z}$, but conditioned on the time ratio $t/T$. The forward Laplace transform is then applied along the time dimension of the latent sequence:
+\begin{equation}
+    U(t) \xrightarrow{\text{Encoder}(t)} z(t) \xrightarrow{\mathcal{L}} \hat{z}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}(t) \xrightarrow{\text{Decoder}(t)} U_{\text{rec}}(t)
+\end{equation}
+This formulation fundamentally reduces the computational overhead of the transform and regularises the dynamics by enforcing temporal consistency within the latent space. However, it introduces a significant computational drawback: LLAE requires passing all $N_t$ physical time frames through the autoencoder (both encoding and decoding) during training and inference, whereas SLAE only processes the $N_L$ frequency frames. Since $N_t \gg N_L$, the LLAE approach is computationally much heavier. Consequently, under a fixed computational budget, we are constrained in terms of the maximum capacity (or volume) of the autoencoder that can be deployed. Specifically, the loss function is defined as:
+\begin{equation}
+\begin{aligned}
+    \mathcal{L}_{\mathrm{LLAE}} &= \frac{1}{N_t}\sum_{n=0}^{N_t-1} \left\| U_{\mathrm{rec}}(t_n) - U(t_n) \right\|_2^2 \\
+    &\quad + \beta_{\mathrm{latent}} \frac{1}{N_t}\sum_{n=0}^{N_t-1} \left\| \tilde{z}(t_n) - z(t_n) \right\|_2^2 \\
+    &\quad + \beta \frac{1}{N_l+1}\sum_{k=0}^{N_l} \left\| \hat{z}(s_k) \right\|_{\C^{d_z}}^2
+\end{aligned}
+\end{equation}
+which combines the physical-time spatial reconstruction error, the latent reconstruction error between the target latent codes $z(t_n)$ and the reconstructed codes $\tilde{z}(t_n)$, and an $L_2$ regularization penalty on the complex Laplace-domain latent representation $\hat{z}(s_k)$.
+
+\paragraph{Latent SVD Laplace AE (LSLAE) Variant.}
+To simplify the learning task of the surrogate model and reduce the latent dimensionality, we introduce a variant called Latent SVD Laplace AE (LSLAE), conceptually related to rank reduction autoencoders \cite{mounayer2025}. In this model, we perform a truncated Singular Value Decomposition (SVD) on the time-domain latent codes $z(t) \in \R^{d_z}$ offline across the training set, yielding a projection matrix $V \in \R^{d_z \times d_{\text{SVD}}}$ (with $d_{\text{SVD}} < d_z$). The temporal latents are projected onto this basis as $G(t) = z(t) V \in \R^{d_{\text{SVD}}}$, and the forward Laplace transform is subsequently applied to $G(t)$ to obtain the lower-dimensional complex frequencies $\hat{G}(s_k) \in \C^{d_{\text{SVD}}}$. The complete autoencoding pipeline is represented as:
+\begin{equation}
+    U(t) \xrightarrow{\text{Encoder}(t)} z(t) \xrightarrow{\text{SVD } V} G(t) \xrightarrow{\mathcal{L}} \hat{G}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{G}(t) \xrightarrow{\text{SVD } V^T} \tilde{z}(t) \xrightarrow{\text{Decoder}(t)} U_{\text{rec}}(t)
+\end{equation}
+
+\subsection{Surrogate Training}
+\label{sec:surrogate}
+
+The surrogate model replaces the encoding steps by predicting the latent representation directly from $\vmu$. Architecturally, the surrogate model $g_{\bm{\theta}}$ maps the physical parameters $\vmu$ to the predicted latent representations in the Laplace domain:
+\begin{equation}
+    z_{\text{pred}}(s_k) = g_{\bm{\theta}}^{(k)}(\vmu), \quad \hat{z}_{\text{pred}}(s_k) = g_{\bm{\theta}}^{(k)}(\vmu), \quad \text{or} \quad \hat{G}_{\text{pred}}(s_k) = g_{\bm{\theta}}^{(k)}(\vmu)
+\end{equation}
+where $g_{\bm{\theta}}^{(k)}$ represents the $k$-th frequency-specific head of the surrogate network, predicting the complex latents for SLAE, LLAE, and LSLAE respectively. Specifically, the forward pass of the surrogate-based reconstruction pipeline is defined for SLAE as:
+\begin{equation}
+    \vmu \xrightarrow{g_{\bm{\theta}}} z_{\text{pred}}(s_k) \xrightarrow{\text{Decoder}} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\text{rec}}(t)
+\end{equation}
+for LLAE as:
+\begin{equation}
+    \vmu \xrightarrow{g_{\bm{\theta}}} \hat{z}_{\text{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}_{\text{pred}}(t) \xrightarrow{\text{Decoder}} U_{\text{rec}}(t)
+\end{equation}
+and for LSLAE as:
+\begin{equation}
+    \vmu \xrightarrow{g_{\bm{\theta}}} \hat{G}_{\text{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{G}_{\text{pred}}(t) \xrightarrow{V^T} \tilde{z}_{\text{pred}}(t) \xrightarrow{\text{Decoder}} U_{\text{rec}}(t)
+\end{equation}
+The entire pipeline is trained end-to-end to minimise the total physical-time loss:
+\begin{equation}
+    \mathcal{L}_{\mathrm{total}} = \alpha_{\mathrm{lat}} \|w_{\text{pred}} - w_{\text{true}}\|^2 + \alpha_{\mathrm{spat}} \|U_{\text{rec}} - U\|^2
+\end{equation}
+where the latent terms $w_{\text{pred}}$ and $w_{\text{true}}$ represent $z_{\text{pred}}(s_k)$ and $z_{\text{true}}(s_k)$ for SLAE, $\hat{z}_{\text{pred}}(s_k)$ and $\hat{z}_{\text{true}}(s_k)$ for LLAE, or $\hat{G}_{\text{pred}}(s_k)$ and $\hat{G}_{\text{true}}(s_k)$ (where $\hat{G}_{\text{true}}(s_k) = \mathcal{L}\{z_{\text{true}}(t) V\}_k$) for LSLAE. This end-to-end backpropagation enables gradients from the spatiotemporal MSE loss to flow backward through both the non-linear spatial decoder and the temporal inverse transform, optimally distributing representation capacity across frequencies and updating the surrogate weights, decoder filters, and the projection basis $V$ (for LSLAE).
+
+\section{Results}
+
+\subsection{Problem Setting}
+
+We consider the emulation of the methane mass fraction $Y$ in a two-dimensional parametric transient reacting flow. The transport equation is formulated as a convection-diffusion-reaction problem over a spatial domain $\Omega \subset \R^2$ and a time interval $t \in [0, T]$:
+\begin{equation}
+    \frac{\partial (\rho Y)}{\partial t} + \nabla \cdot (\rho \mathbf{U} Y) - \nabla \cdot (\mu_{\mathrm{eff}} \nabla Y) = \dot{\omega}_{\mathrm{eff}}(Y; \vmu)
+\end{equation}
+where $\rho$ is the fluid density, $\mathbf{U}$ is the velocity field, $\mu_{\mathrm{eff}}$ is the effective diffusivity, and $\dot{\omega}_{\mathrm{eff}}$ is the effective reaction rate. A detailed formulation of the complete system of governing equations is provided in Appendix~\ref{app:equations}. The system is governed by a vector of three physical parameters $\vmu = [k, \theta, C]^\top \in \R^3$, specifically representing:
+\begin{itemize}
+    \item $k$: Diffusion parameter,
+    \item $\theta$: Injection angle,
+    \item $C$: Injection rate ($\mathrm{kg/m^3/s}$).
+\end{itemize} 
+
+The spatial domain is discretized into a uniform grid of $N_x = N \times N = 128 \times 128$ points, and the temporal domain is resolved into $N_t = 150$ discrete time steps with a uniform step size $\Delta t = 1$\,s. Consequently, the discretized methane mass fraction field $Y$ is represented as a two-dimensional tensor (or matrix) of shape $N_x \times N_t$. The dataset consists of high-fidelity numerical simulations evaluated across different parameter configurations sampled from the physical parameter space. We utilize a dataset partitioned into ?? training simulations and ?? test samples for evaluating the surrogate models.
+
+The performance of the models is evaluated quantitatively using the relative $L^2$ error over the held-out test set, defined as:
+\begin{equation}
+    \epsilon_{\text{rel}} = \frac{\| Y_{\text{true}} - Y_{\text{pred}} \|_2}{\| Y_{\text{true}} \|_2}
+\end{equation}
+We first examine the autoencoder architectures, establishing the reconstruction floor, before evaluating the end-to-end surrogate models.
+
+\subsection{Autoencoder Reconstruction Floor}
+
+The autoencoders establish the best possible reconstruction accuracy achievable from the compressed latent representations, assuming perfect predictions from the surrogate. 
+
+\paragraph{Spatial Laplace AE (SLAE).} 
+The SLAE processes $K=21$ uniform Bromwich frequencies ($k_{\max}=20$) with a damping factor $\gamma=0$. The architecture employs an encoder with 3 strided convolutional downsampling layers and a symmetric decoder with transposed convolutions. Both networks utilise FiLM conditioning with a sinusoidal positional encoding ($L=8$) to process different frequencies with shared weights. The latent dimension is $d_z = 64$. The SLAE provides a robust non-linear spatial compression, achieving a median temporal reconstruction error of 9.17\%, which sets the baseline floor.
+
+\paragraph{Latent Laplace AE (LLAE).}
+The LLAE processes single-channel physical frames using a time-conditioned convolutional encoder and decoder (conditioned on the normalised time step $t/T$ via FiLM, $L=8$), compressing each frame to $d_z = 64$. The temporal sequence of latent codes undergoes a differentiable Laplace transform over $K=16$ learnable frequencies, initialised with $\gamma=0.01$. The inverse Laplace transform is stabilised using Tikhonov regularisation ($\alpha_t = 7 \times 10^{-3}$, $\lambda=3 \times 10^{-5}$). 
+
+\paragraph{Laplace SVD Baseline.}
+As a linear baseline, a truncated SVD is applied independently to each Laplace frequency across the training set ($d_{\mathrm{SVD}} = 32$). While computationally simple, the linear basis truncation error is substantial, yielding a widespread error distribution that fails to adequately capture the highly non-linear dynamics of the convection-diffusion-reaction process.
+
+Figure~\ref{fig:ae_reconstruction} presents the reconstruction error histograms for the linear SVD baseline and both autoencoder architectures.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/LaplaceSVDModel_l2rel_hist.png}
+        \caption{Laplace SVD Baseline}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/ae_study_temporal_error.png}
+        \caption{SLAE Reconstruction Error}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/latent_laplace_ae_l2rel_hist.png}
+        \caption{LLAE Reconstruction Error}
+    \end{subfigure}
+    \caption{Relative $L^2$ reconstruction error distributions on the test set. The linear SVD baseline struggles with the non-linear transients, whereas the autoencoders establish a much lower reconstruction floor for the surrogates.}
+    \label{fig:ae_reconstruction}
+\end{figure}
+
+\subsection{Surrogate Prediction Performance}
+
+The surrogate models predict the latent representation directly from the physical parameters $\vmu$. For the latent Laplace models (LLAE and LSLAE variants), the surrogate architectures employ independent MLPs for each frequency, consisting of 4 layers with a trunk size of 256 and a head size of 128, mapping the 3-dimensional physical parameter vector to the complex frequency latents. For the LSLAE variant, the latent sequence is first projected offline using SVD to $d_{\mathrm{SVD}} = 32$ modes to reduce the prediction dimensionality.
+
+The overall prediction performances are evaluated for three configurations: the SLAE surrogate, the LLAE surrogate, and the LSLAE surrogate. Figure~\ref{fig:surrogate_performance} illustrates the relative $L^2$ error distributions for these models. 
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/LaplaceModel_l2rel_hist.png}
+        \caption{SLAE Surrogate}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/LatentLaplaceSurrogate_best_l2rel_hist.png}
+        \caption{LLAE Surrogate}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../plots/LatentSVDLaplace_best_l2rel_hist.png}
+        \caption{LSLAE Surrogate}
+    \end{subfigure}
+    \caption{Relative $L^2$ error distributions for the surrogate models over the test set. End-to-end training enables the autoencoder-based surrogates to bridge the gap toward their respective reconstruction floors.}
+    \label{fig:surrogate_performance}
+\end{figure}
+
+The non-linear autoencoder-based models (SLAE, LLAE, and LSLAE surrogates) benefit significantly from the expressive capacity of the learned latent spaces and the end-to-end training strategy.
+
+\section{Comparison and Discussion}
+
+A comprehensive comparison of the methods is provided in Table \ref{tab:comparison}.
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lp{5cm}p{4cm}l}
+        \toprule
+        \textbf{Model} & \textbf{Advantages} & \textbf{Drawbacks} & \textbf{Performance} \\
+        \midrule
+        \textbf{SLAE} & Expressive non-linear spatial compression, frequency-conditioned (FiLM) & Memory intensive for computing all frequency frames & High \\
+        \textbf{LLAE} & Laplace transform applied on low-dimensional latents $z(t)$ & Requires robust temporal consistency; computationally heavy (processes all $N_t$ frames versus $N_L$), limiting network capacity under equal compute & High \\
+        \textbf{LSLAE} & Reduces latent dimensionality via SVD, simplifying the surrogate task; trained end-to-end & SVD truncation error in latent space; computationally heavy (processes all $N_t$ frames) & High \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparison of surrogate strategies. End-to-end training is indispensable for the AE-based models.}
+    \label{tab:comparison}
+\end{table}
+
+\subsection{Addressing Gibbs Oscillations: The Correction AE}
+
+The primary limitation of working in the Laplace domain is the necessary spectral truncation at a maximum frequency $k_{\max}$ to discard high-frequency noise. This truncation introduces Gibbs phenomena, manifesting as non-physical oscillations in the time domain $U_{\text{rec}}(t)$, particularly around sharp transients like explosion-like concentration onsets. 
+
+To mitigate these numerical artefacts, we introduce a lightweight \textbf{Correction Autoencoder (UNet residual corrector)}. Applied as a final post-processing patch, this network takes the inverted temporal fields $U_{\text{rec}}(t)$ and predicts a high-frequency residual correction $\delta_{\mathrm{pred}}(t)$, smoothing the oscillations. The target residual is $\delta_{\mathrm{true}}(t) = U(t) - U_{\text{rec}}(t)$. The corrector is trained by minimizing a normalized residual loss function that incorporates both MSE on the residuals and MSE on their spatial gradients to penalize spatial oscillations:
+\begin{equation}
+\begin{aligned}
+    \mathcal{L}_{\mathrm{Correction}} &= \left\| \frac{\delta_{\mathrm{pred}}(t)}{\sigma} - \frac{\delta_{\mathrm{true}}(t)}{\sigma} \right\|_2^2 \\
+    &\quad + \lambda_{\mathrm{grad}} \left( \left\| \frac{\nabla_x \delta_{\mathrm{pred}}(t)}{\sigma} - \frac{\nabla_x \delta_{\mathrm{true}}(t)}{\sigma} \right\|_2^2 + \left\| \frac{\nabla_y \delta_{\mathrm{pred}}(t)}{\sigma} - \frac{\nabla_y \delta_{\mathrm{true}}(t)}{\sigma} \right\|_2^2 \right)
+\end{aligned}
+\end{equation}
+where $\sigma$ is the standard deviation of $\delta_{\mathrm{true}}(t)$ used as a normalization scaling factor, and $\lambda_{\mathrm{grad}}$ is a hyperparameter balancing the gradient penalty. This approach effectively smooths the oscillations and drastically reduces the median relative error at a marginal parameter cost. The final corrected error distribution is shown in Figure~\ref{fig:corrector_results}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{../plots/correctionae_unet_l2rel_hist.png}
+    \caption{Relative $L^2$ error distribution for the UNet residual corrector. By smoothing out truncation artefacts, the corrector significantly improves the final temporal predictions.}
+    \label{fig:corrector_results}
+\end{figure}
+\begin{appendices}
+\addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+
+\section{Governing Equations}
+\label{app:equations}
+
+Our neural surrogate model is designed to emulate the transient dynamics of a reacting flow system. The physical system is governed by a set of coupled partial differential equations representing the conservation of mass, momentum, energy, and chemical species.
+
+\begin{enumerate}
+    \item \textbf{Fluid Mechanics (Momentum):}
+    \begin{equation}
+        \frac{\partial(\rho\mathbf{U})}{\partial t} + \nabla \cdot (\rho\mathbf{U}\mathbf{U}) - \nabla \cdot \tau = -\nabla p + \rho\mathbf{g}
+    \end{equation}
+
+    \item \textbf{Chemical Species Transport:}
+    \begin{equation}
+        \frac{\partial(\rho Y_i)}{\partial t} + \nabla \cdot (\rho\mathbf{U}Y_i) - \nabla \cdot (\mu_{\mathrm{eff}}\nabla Y_i) = \dot{\omega}_{i,\mathrm{eff}}
+    \end{equation}
+    under the constraint $\sum Y_i = 1$.
+
+    \item \textbf{Energy:}
+    \begin{equation}
+        \frac{\partial(\rho h)}{\partial t} + \nabla \cdot (\rho\mathbf{U}h) + \frac{\partial(\rho K)}{\partial t} + \nabla \cdot (\rho\mathbf{U}K) - \frac{\partial p}{\partial t} - \nabla \cdot (\alpha_{\mathrm{eff}}\nabla h) = \dot{q}_{\mathrm{chem}}
+    \end{equation}
+    where $K = \frac{1}{2}|\mathbf{U}|^2$ is the kinetic energy.
+
+    \item \textbf{Combustion Model (PaSR):}
+    The effective reaction rate is modulated by the Partially Stirred Reactor model:
+    \begin{equation}
+        \dot{\omega}_{i,\mathrm{eff}} = \kappa\dot{\omega}_i(c^*, T^*), \quad \text{with} \quad \kappa = \frac{\tau_c}{\tau_c + \tau_{\mathrm{mix}}}
+    \end{equation}
+    where $\tau_c$ and $\tau_{\mathrm{mix}}$ are the characteristic chemical and turbulent mixing times, respectively.
+
+    \item \textbf{Equation of State:}
+    The ideal gas law closes the system:
+    \begin{equation}
+        p = \rho R T \quad \text{or} \quad \rho = \psi p \quad \text{with} \quad \psi = \frac{1}{R T}
+    \end{equation}
+\end{enumerate}
+
+\section{Architectural Details and Setup}
+\label{app:architecture}
+
+All models were trained using the Adam optimizer with a learning rate of $5 \times 10^{-4}$ for the autoencoders and $3 \times 10^{-4}$ for the surrogates, over 300 epochs. The autoencoders used a batch size of 256 (SLAE) or 16 (LLAE). Training was performed on a workstation equipped with an Intel(R) Xeon(R) w3-2435 CPU (62GB RAM) and an NVIDIA GeForce RTX 3090 GPU (24GB VRAM). Training data consists of 1620 simulations; the test set contains 810 samples.
+
+Table~\ref{tab:ae_architectures} and Table~\ref{tab:surrogate_hyperparameters} provide a detailed summary of the network architectures and hyperparameters used for the various models discussed in this study.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{lp{4.2cm}p{4.2cm}p{3.5cm}}
+        \toprule
+        \textbf{Model} & \textbf{Encoder} & \textbf{Decoder} & \textbf{Conditioning head} \\
+        \midrule
+        \textbf{SLAE} & 
+        3 Conv2d (channels: 16, 32, 64, stride: 2) + LeakyReLU, \newline 2 Linear layers & 
+        1 Linear, \newline 3 ConvT2d (channels: 128, 64, 32, stride: 2) + ReLU, \newline 3 Conv2d (channels: 32, 32, 1) &
+        Positional Encoding + FiLM \\
+        \midrule
+        \textbf{LLAE} & 
+        3 Conv2d (channels: 16, 32, 64, stride: 2) + LeakyReLU, \newline 2 Linear layers & 
+        1 Linear, \newline 3 ConvT2d (channels: 64, 32, 16, stride: 2) + ReLU, \newline 3 Conv2d (channels: 16, 16, 1) &
+        Positional Encoding + FiLM \\
+        \bottomrule
+    \end{tabular}
+    }
+    \caption{Network Architectures. Notation: Conv2d(in, out, $k$: kernel\_size, $s$: stride, $p$: padding). All conv layers use LeakyReLU (encoder) or ReLU (decoder), and BatchNorm is applied in decoder ConvT2d layers.}
+    \label{tab:ae_architectures}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Hyperparameter} & \textbf{SLAE} & \textbf{LLAE} & \textbf{LSLAE} & \textbf{Corrector} \\
+        \midrule
+        $d_z$ & 64 & 64 & 64 & --- \\
+        $K$ & 21 & 16 & 16 & --- \\
+        $\gamma_\text{init}$ & 0 & 0.01 & 0.01 & --- \\
+        $d_\text{SVD}$ & --- & --- & 32 & --- \\
+        $\beta$ (latent ridge) & $10^{-3}$ & $10^{-2}$ & $10^{-2}$ & --- \\
+        $\alpha_t$ (Tikhonov smoothness) & --- & $7\times 10^{-3}$ & $7\times 10^{-3}$ & --- \\
+        $\lambda$ (Tikhonov ridge) & --- & $3\times 10^{-5}$ & $3\times 10^{-5}$ & --- \\
+        $\alpha_\text{lat}$ & % TODO: [find alpha_lat] 
+        --- & % TODO: [find alpha_lat] 
+        --- & % TODO: [find alpha_lat] 
+        --- & --- \\
+        $\alpha_\text{spat}$ & % TODO: [find alpha_spat] 
+        --- & % TODO: [find alpha_spat] 
+        --- & % TODO: [find alpha_spat] 
+        --- & --- \\
+        $\lambda_\text{grad}$ & --- & --- & --- & 10.0 \\
+        Trunk / Head (MLP) & --- & 256 / 128 & 256 / 128 & --- \\
+        Base channels & --- & --- & --- & 16 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Hyperparameters for the Autoencoders, Surrogates, and Corrector models.}
+    \label{tab:surrogate_hyperparameters}
+\end{table}
+
+\end{appendices}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

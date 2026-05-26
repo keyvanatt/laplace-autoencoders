@@ -1,0 +1,13 @@
+data_path: dataset/ch4_rotated.npy
+split_path: dataset/split.npz
+cache_dir: /Data/KAT
+
+dt: 1.0
+interp_size: 128
+rule: trap
+
+# Fraction train/val dans le split non-test
+train_val_split: 0.8
+
+# Dimension de theta (k, A, C pour ch4_rotated)
+theta_dim: 3
