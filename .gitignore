@@ -1,0 +1,19 @@
+__pycache__
+.conda
+wandb
+notebooks
+dataset/mnist
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.toc
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb

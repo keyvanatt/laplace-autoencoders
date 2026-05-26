@@ -1,0 +1,5 @@
+# Hyperparamètres pour la phase AE (train_ae.py)
+epochs: 300
+batch_size: 256
+lr: 5.0e-4
+patience: 40

@@ -1,0 +1,4 @@
+from laplace_surrogate.lightning.ae_module import AELightningModule
+from laplace_surrogate.lightning.surrogate_module import SLAESurrogateLightningModule
+from laplace_surrogate.lightning.llae_surrogate_module import LLAESurrogateLightningModule
+from laplace_surrogate.lightning.corrector_module import CorrectorLightningModule

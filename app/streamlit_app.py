@@ -1,0 +1,226 @@
+"""
+app/streamlit_app.py — Visualisation CH4 transitoire via le surrogate Laplace AE.
+
+Usage :
+    PYTHONPATH=src streamlit run app/streamlit_app.py
+"""
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+import base64
+import io
+import json
+
+import numpy as np
+import matplotlib
+import torch
+import streamlit as st
+import streamlit.components.v1 as components
+import plotly.graph_objects as go
+from PIL import Image
+
+from laplace_surrogate.inference.pipeline import InferencePipeline
+
+# ---------------------------------------------------------------------------
+# Constantes
+# ---------------------------------------------------------------------------
+THETA_PARAMS = [
+    ('k (Diffusion)',                0.0,   1.00,   0.55,   '%.3f'),
+    ('A (angle)',                    0.0,   360.0,  0.0,    '%.1f'),
+    ('C (Injection rate kg/m³/s)',   0.005, 0.02,   0.0125, '%.4f'),
+]
+
+MODELS = {
+    'Baseline':  'checkpoints/SLAEModel_best.pt',
+    'Finetuned': 'checkpoints/SLAEModel_finetuned.pt',
+    'Corrected': 'checkpoints/CorrectionAE_best.pt',
+}
+
+CKPT_K_MAX = 20
+NT         = 150
+DT         = 1.0
+
+_CMAP_MAP = {
+    'RdBu':    'RdBu_r',
+    'Viridis': 'viridis',
+    'Plasma':  'plasma',
+    'Inferno': 'inferno',
+    'Hot':     'hot',
+    'Turbo':   'turbo',
+}
+
+
+# ---------------------------------------------------------------------------
+# Cache modèle
+# ---------------------------------------------------------------------------
+@st.cache_resource
+def get_pipeline(model_key: str) -> InferencePipeline:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return InferencePipeline.from_checkpoint(MODELS[model_key], device)
+
+
+def _compute_upred(model_key: str, k: float, A: float, C: float) -> np.ndarray:
+    pipe   = get_pipeline(model_key)
+    theta  = np.array([[k, A, C]], dtype=np.float32)
+    return pipe.predict(theta, k_max=CKPT_K_MAX)[0]  # (Nt, N, N)
+
+
+def render_frame(frame: np.ndarray, cmap_name: str) -> bytes:
+    vmin, vmax = 0.0, 0.05
+    U_norm  = (frame - vmin) / max(vmax - vmin, 1e-8)
+    cmap_fn = matplotlib.colormaps[_CMAP_MAP.get(cmap_name, 'viridis')]
+    rgba    = (cmap_fn(U_norm) * 255).astype(np.uint8)
+    buf     = io.BytesIO()
+    Image.fromarray(rgba[..., :3]).save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Layout
+# ---------------------------------------------------------------------------
+st.set_page_config(page_title='CH4 Transitoire', layout='wide')
+st.title('CH4 Transitoire — Surrogate Laplace AE')
+
+st.sidebar.header('Modèle')
+_model_names = list(MODELS.keys())
+model_key = st.sidebar.radio('Pipeline', _model_names,
+                              index=_model_names.index('Corrected'))
+
+st.sidebar.markdown('---')
+st.sidebar.header('Paramètres physiques θ')
+slider_vals = []
+for label, lo, hi, default, fmt in THETA_PARAMS:
+    v = st.sidebar.slider(label, float(lo), float(hi), float(default),
+                          step=float((hi - lo) / 200), format=fmt)
+    slider_vals.append(v)
+k_val, A_val, C_val = slider_vals
+
+st.sidebar.markdown('---')
+_cmaps    = list(_CMAP_MAP.keys())
+cmap_name = st.sidebar.selectbox('Colormap', _cmaps, index=0)
+
+
+# ---------------------------------------------------------------------------
+# Inférence (mis en cache dans session_state)
+# ---------------------------------------------------------------------------
+_cache_key = (model_key, k_val, A_val, C_val)
+if st.session_state.get('upred_key') != _cache_key:
+    with st.spinner('Inférence en cours…'):
+        st.session_state['U_pred'] = _compute_upred(model_key, k_val, A_val, C_val)
+    st.session_state['upred_key'] = _cache_key
+
+U_pred = st.session_state['U_pred']
+
+
+# ---------------------------------------------------------------------------
+# Rendu des frames
+# ---------------------------------------------------------------------------
+_frames_key = (_cache_key, cmap_name)
+if st.session_state.get('frames_key') != _frames_key:
+    with st.spinner('Rendu des frames…'):
+        st.session_state['frames'] = [render_frame(U_pred[i], cmap_name) for i in range(NT)]
+    st.session_state['frames_key'] = _frames_key
+
+frames = st.session_state['frames']
+
+
+# ---------------------------------------------------------------------------
+# Composant animation JS
+# ---------------------------------------------------------------------------
+st.caption(f'θ = (k={k_val:.3f}, A={A_val:.1f}, C={C_val:.4f})')
+
+if st.session_state.get('anim_html_key') != _frames_key:
+    _frames_b64 = json.dumps([base64.b64encode(f).decode() for f in frames])
+    _first_b64  = base64.b64encode(frames[0]).decode()
+    st.session_state['anim_html_key'] = _frames_key
+    st.session_state['anim_html'] = """
+<style>
+  body { margin:0; background:transparent; }
+  .ctrl { display:flex; align-items:center; gap:10px; margin-top:10px; }
+  #playbtn {
+    background:#4a90d9; border:none; border-radius:50%;
+    width:38px; height:38px; font-size:15px; cursor:pointer;
+    color:#fff; flex-shrink:0; line-height:1; transition:background .15s;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  #playbtn:hover { background:#2d72b8; }
+  #tslider { flex:1; accent-color:#4a90d9; cursor:pointer; }
+  .mono { font-family:monospace; font-size:13px; color:#ccc; min-width:52px; text-align:right; }
+  .fps-row { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; color:#aaa; }
+  #fpsinput {
+    width:44px; background:#2a2a2a; border:1px solid #555;
+    border-radius:4px; color:#eee; padding:2px 4px; font-size:12px; text-align:center;
+  }
+</style>
+<div style="display:flex;flex-direction:column;align-items:center;font-family:sans-serif;padding:4px 8px">
+  <img id="anim-frame"
+       src="data:image/png;base64,""" + _first_b64 + """"
+       style="width:300px;height:300px;object-fit:contain;border-radius:4px"/>
+  <div class="ctrl" style="width:320px">
+    <button id="playbtn" onclick="togglePlay()">&#9654;</button>
+    <input type="range" id="tslider" min="0" value="0" oninput="seek(+this.value)"/>
+    <span id="tlabel" class="mono">t = 0</span>
+  </div>
+  <div class="fps-row">
+    FPS
+    <input type="number" id="fpsinput" value="15" min="1" max="60" oninput="setFps(+this.value)"/>
+  </div>
+</div>
+<script>
+(function() {
+  const frames = """ + _frames_b64 + """;
+  const NT     = frames.length;
+  document.getElementById('tslider').max = NT - 1;
+  const img    = document.getElementById('anim-frame');
+  const slider = document.getElementById('tslider');
+  const label  = document.getElementById('tlabel');
+  const btn    = document.getElementById('playbtn');
+
+  const _saved = parseInt(localStorage.getItem('anim_t') || '0');
+  let idx = (!isNaN(_saved) && _saved < NT) ? _saved : 0;
+  let playing = false, fps = 15, handle = null;
+
+  function render() {
+    img.src = 'data:image/png;base64,' + frames[idx];
+    slider.value = idx;
+    label.textContent = 't = ' + idx;
+  }
+  function advance() { idx = (idx + 1) % NT; localStorage.setItem('anim_t', idx); render(); }
+
+  window.togglePlay = function() {
+    playing = !playing;
+    btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+    playing ? (handle = setInterval(advance, 1000/fps)) : clearInterval(handle);
+  };
+  window.seek = function(i) { idx = i; localStorage.setItem('anim_t', idx); render(); };
+  window.setFps = function(f) {
+    fps = f || 1;
+    if (playing) { clearInterval(handle); handle = setInterval(advance, 1000/fps); }
+  };
+  render();
+})();
+</script>
+"""
+
+components.html(st.session_state['anim_html'], height=400, scrolling=False)
+
+
+# ---------------------------------------------------------------------------
+# Courbe temporelle
+# ---------------------------------------------------------------------------
+with st.expander('Évolution temporelle (moyenne spatiale)', expanded=False):
+    mean_t = U_pred.mean(axis=(1, 2))
+    fig_ts = go.Figure()
+    fig_ts.add_trace(go.Scatter(
+        x=list(range(U_pred.shape[0])), y=mean_t.tolist(),
+        mode='lines', line=dict(color='royalblue'),
+    ))
+    fig_ts.update_layout(
+        xaxis_title='t', yaxis_title='mean(U)',
+        height=240,
+        margin=dict(l=10, r=10, t=10, b=30),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    st.plotly_chart(fig_ts, width='stretch')

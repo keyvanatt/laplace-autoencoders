@@ -1,0 +1,22 @@
+# Hyperparamètres pour la phase surrogate SLAE (train_surrogate.py model=slae)
+epochs: 300
+batch_size: 16
+lr_surrogate: 3.0e-4
+lr_decoder: 5.0e-5
+patience: 40
+
+# Architecture du surrogate (overridable depuis model/)
+hidden_dim: 512
+head_dim: 256
+n_trunk: 4
+n_head: 2
+freq_L: 8
+surr_freq_L: 6
+latent_dim: 64
+
+# Laplace inversion params (gelés en phase surrogate)
+alpha_t: 0.007
+lam: 3.0e-5
+
+# Checkpoint AE SLAE à charger pour initialiser le décodeur gelé
+ae_ckpt: checkpoints/slae_best.pt
