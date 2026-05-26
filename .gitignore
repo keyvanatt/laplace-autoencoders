@@ -3,6 +3,8 @@ __pycache__
 wandb
 notebooks
 dataset/mnist
+.log/
+.hydra/
 
 # LaTeX auxiliary files
 *.aux

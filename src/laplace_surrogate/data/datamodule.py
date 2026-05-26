@@ -225,8 +225,9 @@ class TransientDataModule(pl.LightningDataModule):
         s_list = None
         if laplace:
             K      = self.cfg.model.get('K', 16)
+            gamma  = self.cfg.model.get('gamma_init', 0.0)
             s_im   = np.linspace(0.0, math.pi / cfg_d.dt, K)
-            s_list = (0.0 + 1j * s_im).astype(np.complex128)
+            s_list = (gamma + 1j * s_im).astype(np.complex128)
 
         self.dataset = TransientDataset(
             cfg_d.data_path,
