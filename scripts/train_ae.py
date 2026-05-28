@@ -86,6 +86,14 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     import torch
-    from omegaconf import DictConfig
-    torch.serialization.add_safe_globals([DictConfig])
+    from omegaconf.dictconfig import DictConfig
+    from omegaconf.listconfig import ListConfig
+    from omegaconf.base import ContainerMetadata, Metadata
+    from omegaconf.nodes import (
+        AnyNode, IntegerNode, FloatNode, StringNode, BooleanNode,
+    )
+    torch.serialization.add_safe_globals([
+        DictConfig, ListConfig, ContainerMetadata, Metadata,
+        AnyNode, IntegerNode, FloatNode, StringNode, BooleanNode,
+    ])
     main()
