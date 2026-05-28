@@ -1,5 +1,5 @@
 defaults:
-  - model: slae
+  - model: llae
   - training: ae
   - data: combustion
   - eval: default
@@ -7,7 +7,7 @@ defaults:
 
 seed: 42
 project: convdiff
-save_dir: checkpoints
+save_dir: /Data/KAT/checkpoints
 
 hydra:
   run:
@@ -17,6 +17,6 @@ hydra:
     handlers:
       file:
         class: logging.FileHandler
-        formatter: colorlog
+        formatter: simple
         filename: .log/${hydra.job.name}.log
         mode: w
