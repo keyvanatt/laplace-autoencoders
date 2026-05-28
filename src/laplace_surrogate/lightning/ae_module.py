@@ -5,7 +5,7 @@ Supporte SLAE (cfg.model.name='slae') et LLAE (cfg.model.name='llae').
 """
 import torch
 import pytorch_lightning as pl
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 
 class AELightningModule(pl.LightningModule):
@@ -123,6 +123,29 @@ class AELightningModule(pl.LightningModule):
         }
 
     # ------------------------------------------------------------------
+
+    def on_load_checkpoint(self, checkpoint):
+        saved_cfg = checkpoint.get('hyper_parameters', {}).get('cfg')
+        if saved_cfg is None:
+            return
+        saved = OmegaConf.to_container(OmegaConf.create(saved_cfg), resolve=True)
+        current = OmegaConf.to_container(self.cfg, resolve=True)
+        diffs = []
+        for section in ('model', 'training'):
+            s_sec = saved.get(section, {})
+            c_sec = current.get(section, {})
+            for key in set(s_sec) | set(c_sec):
+                s_val, c_val = s_sec.get(key), c_sec.get(key)
+                if s_val != c_val:
+                    diffs.append(f"  {section}.{key}: {s_val} → {c_val}")
+        if diffs:
+            import warnings
+            warnings.warn(
+                "Resuming from checkpoint with different hyperparameters:\n"
+                + "\n".join(diffs),
+                UserWarning,
+                stacklevel=2,
+            )
 
     def on_save_checkpoint(self, checkpoint):
         dm = getattr(self.trainer, 'datamodule', None)
