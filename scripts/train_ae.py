@@ -47,9 +47,15 @@ def main(cfg: DictConfig):
     dm     = TransientDataModule(cfg, mode='ae')
     module = AELightningModule(cfg)
 
+    from omegaconf import OmegaConf
     tag      = _ae_tag(cfg.model)
     run_name = f"{tag}_ae"
-    logger   = WandbLogger(project=cfg.project, name=run_name, group=f"{cfg.model.name}_ae")
+    logger   = WandbLogger(
+        project=cfg.project,
+        name=run_name,
+        group=f"{cfg.model.name}_ae",
+        config=OmegaConf.to_container(cfg, resolve=True),
+    )
 
     ckpt_cb = ModelCheckpoint(
         dirpath=cfg.save_dir,
