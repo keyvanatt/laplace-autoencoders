@@ -37,17 +37,20 @@ JOB_CONFIGS = {
         "model": "llae",
         "model.gamma_init": 0.0,
         "training.batch_size": 16,
+        "+training.ckpt_path": "/Data/KAT/checkpoints/llae_ld64_K16_g0.0.ckpt",
     },
     "kamiche.polytechnique.fr": {
         "model": "llae",
         "model.gamma_init": 0.01,
         "training.batch_size": 16,
+        "+training.ckpt_path": "/Data/KAT/checkpoints/llae_ld64_K16_g0.01.ckpt",
     },
     "jabiru.polytechnique.fr": {
         "model": "llae",
         "model.gamma_init": 0.0,
         "training.batch_size": 16,
         "model.learnable_laplace": True,
+        "+training.ckpt_path": "/Data/KAT/checkpoints/llae_ld64_K16_g0.0_ll.ckpt",
     },
 }
 

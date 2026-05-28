@@ -74,7 +74,8 @@ def main(cfg: DictConfig):
         callbacks=[ckpt_cb, early_stop],
         log_every_n_steps=50,
     )
-    trainer.fit(module, dm)
+    ckpt_path = cfg.training.get('ckpt_path', None)
+    trainer.fit(module, dm, ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":
