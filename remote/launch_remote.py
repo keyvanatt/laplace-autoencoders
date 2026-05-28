@@ -158,22 +158,6 @@ if __name__ == "__main__":
         table.add_row(r["host"], r["status"], r["session"])
     console.print(table)
 
-    if not clients:
-        console.print("\n[red]No hosts reachable.[/red]")
-        raise SystemExit(1)
-
-    console.print()
-    console.print(Rule("[dim]Live logs — Ctrl+C to exit[/dim]"))
-    console.print()
-
-    try:
-        with Live(build_live(clients), console=console, refresh_per_second=1) as live:
-            while True:
-                time.sleep(REFRESH_INTERVAL)
-                live.update(build_live(clients))
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for client in clients.values():
-            client.close()
-        console.print("\n[dim]Connections closed. Jobs are still running remotely.[/dim]")
+    for client in clients.values():
+        client.close()
+    console.print("\n[dim]Jobs launched. Use monitor_remote.py to follow logs.[/dim]")
