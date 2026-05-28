@@ -6,10 +6,10 @@ Nt: 150
 latent_dim: 64
 K: 16            # nombre de fréquences apprenables s_k (article Table 1)
 dt: 1.0
-beta: 1.0e-3     # ridge sur z
+beta: 1.0e-2     # ridge sur z
 beta_latent: 0.1 # MSE roundtrip Laplace dans le latent
-gamma_init: 0.01
+gamma_init: 0.00
 time_L: 8        # niveaux FiLM pour le conditionnement temporel
-learnable_laplace: false
+learnable_laplace: true
 alpha_t: 7.0e-3  # Tikhonov smoothness (article Table 1)
 lam: 3.0e-5      # Tikhonov ridge (article Table 1)
