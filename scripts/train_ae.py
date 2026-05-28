@@ -86,4 +86,6 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     import torch
+    from omegaconf import DictConfig
+    torch.serialization.add_safe_globals([DictConfig])
     main()
