@@ -48,7 +48,7 @@ def rotate_dataset(
         output_size: Final spatial resolution after center-cropping.
     """
     ch4 = np.load(os.path.join(input_dir, "CH4.npy"))   # (N, T, H, W)
-    doe = np.load(os.path.join(input_dir, "doe.npy"))    # structured: (N,) with fields k, A, C
+    doe = np.load(os.path.join("/users/eleves-b/2023/keyvan.attarian/diffusion-ae/dataset/", "doe.npy"))    # structured: (N,) with fields k, A, C
 
     N, T, H, W = ch4.shape
     assert H == 200 and W == 200, f"Expected 200x200 input, got {H}x{W}"
