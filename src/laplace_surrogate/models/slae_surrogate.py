@@ -63,7 +63,7 @@ class SLAEModel(BaseDecoder):
         self.register_buffer('U_std',  torch.ones(N, N))
 
         self.laplace = LearnableLaplace(
-            K=K, dt=dt, Nt=Nt, gamma_init=0.0,
+            K=K, dt=dt, Nt=Nt,
             learnable=False, alpha_t=alpha_t, lam=lam,
         )
 

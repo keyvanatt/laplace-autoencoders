@@ -1,0 +1,6 @@
+{
+  "venvPath": ".",
+  "venv": ".conda",
+  "extraPaths": ["src"],
+  "pythonVersion": "3.10"
+}

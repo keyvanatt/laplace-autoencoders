@@ -77,8 +77,8 @@ def test_slae_model_generate_shape():
     )
     model.U_mean.zero_()
     model.U_std.fill_(1.0)
-    model.s_real.zero_()
-    model.s_imag.copy_(torch.linspace(0, math.pi, K))
+    model.laplace.s_re.zero_()
+    model.laplace.s_im.copy_(torch.linspace(0, math.pi, K))
 
     theta_n = torch.zeros(B, TDIM)
     with torch.no_grad():

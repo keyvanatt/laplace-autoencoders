@@ -18,7 +18,6 @@ Training step :
 """
 import numpy as np
 import torch
-import torch.nn as nn
 import pytorch_lightning as pl
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -143,7 +142,6 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
             latent_dim=latent_dim,
             k_svd=cfg_t.k_svd,
             K=K, dt=dt,
-            gamma_init=cfg_m.get('gamma_init', 0.0),
             time_L=time_L,
             hidden_dim=cfg_t.hidden_dim,
             head_dim=cfg_t.head_dim,

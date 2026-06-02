@@ -15,14 +15,12 @@ def _strip_model_prefix(state_dict: dict) -> dict:
 def peek_ae_hparams(ae_ckpt_path: str) -> dict:
     """
     Lit les hyperparamètres structurels d'un checkpoint AE sans instancier le modèle.
-    Retourne {'K', 'gamma_init'} — utilisés par le DataModule pour construire
-    la transformée de Laplace avant dm.setup().
+    Retourne {'K'} — utilisé par le DataModule avant dm.setup().
     """
     ae_ck = torch.load(ae_ckpt_path, map_location='cpu', weights_only=False)
     m_cfg = _ae_model_cfg(ae_ck)
     return {
-        'K':          int(m_cfg['K']),
-        'gamma_init': float(m_cfg.get('gamma_init', 0.0)),
+        'K': int(m_cfg['K']),
     }
 
 
