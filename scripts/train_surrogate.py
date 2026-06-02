@@ -18,7 +18,7 @@ from omegaconf import DictConfig
 
 
 _SURROGATE_MODULES = {
-    'slae':  ('laplace_surrogate.lightning.surrogate_module',       'SLAESurrogateLightningModule',  'SLAEModel'),
+    'slae':  ('laplace_surrogate.lightning.slae_surrogate_module',  'SLAESurrogateLightningModule',  'SLAEModel'),
     'llae':  ('laplace_surrogate.lightning.llae_surrogate_module',  'LLAESurrogateLightningModule',  'LLAEModel'),
     'lslae': ('laplace_surrogate.lightning.lslae_surrogate_module', 'LSLAESurrogateLightningModule', 'LSLAEModel'),
 }

@@ -1,5 +1,5 @@
 """
-surrogate_module.py — LightningModule pour l'entraînement end-to-end du surrogate SLAE θ→z (phase 2).
+slae_surrogate_module.py — LightningModule pour l'entraînement end-to-end du surrogate SLAE θ→z (phase 2).
 
 Batch : (theta_norm, U_norm) avec U_norm = (U - U_mean) / U_std  [domaine temporel].
 Loss spatiale sur U_norm.
