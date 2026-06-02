@@ -157,10 +157,11 @@ class SLAEModel(BaseDecoder):
         z_pred      : torch.Tensor,
         z_true      : torch.Tensor,
         alpha_lat   : float = 1.0,
+        alpha_spat  : float = 1.0,
     ) -> tuple[torch.Tensor, dict]:
         spat_loss = F.mse_loss(u_pred_norm.float(), u_true_norm.float())
         lat_loss  = F.mse_loss(z_pred.float(), z_true.float())
-        total     = spat_loss + alpha_lat * lat_loss
+        total     = alpha_spat * spat_loss + alpha_lat * lat_loss
         return total, {'spat': spat_loss.detach(), 'lat': lat_loss.detach()}
 
     def _generate(self, theta_norm: torch.Tensor, **kwargs) -> torch.Tensor:

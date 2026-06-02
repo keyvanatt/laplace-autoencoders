@@ -63,9 +63,10 @@ class SLAESurrogateLightningModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         th, u_true_norm  = batch                   # (B, 3), (B, Nt, N, N)
         u_pred, z_pred, z_true = self.model(th, u_true_norm)
-        alpha_lat = float(self.cfg.training.alpha_lat)
+        alpha_lat  = float(self.cfg.training.alpha_lat)
+        alpha_spat = float(self.cfg.training.alpha_spat)
         loss, metrics = self.model.loss(u_true_norm, u_pred, z_pred, z_true,
-                                        alpha_lat=alpha_lat)
+                                        alpha_lat=alpha_lat, alpha_spat=alpha_spat)
 
         with torch.no_grad():
             l2rel = ((u_pred.float() - u_true_norm.float()).flatten(1).norm(dim=1)
@@ -80,9 +81,10 @@ class SLAESurrogateLightningModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         th, u_true_norm  = batch
         u_pred, z_pred, z_true = self.model(th, u_true_norm)
-        alpha_lat = float(self.cfg.training.alpha_lat)
+        alpha_lat  = float(self.cfg.training.alpha_lat)
+        alpha_spat = float(self.cfg.training.alpha_spat)
         loss, metrics = self.model.loss(u_true_norm, u_pred, z_pred, z_true,
-                                        alpha_lat=alpha_lat)
+                                        alpha_lat=alpha_lat, alpha_spat=alpha_spat)
 
         l2rel = ((u_pred.float() - u_true_norm.float()).flatten(1).norm(dim=1)
                  / (u_true_norm.float().flatten(1).norm(dim=1) + 1e-8)).mean()
