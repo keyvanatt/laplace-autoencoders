@@ -1,8 +1,5 @@
 """
-llae_surrogate.py — Surrogate θ → latents Laplace pour LLAE (LLAEModel).
-
-LLAESurrogate : trunk MLP partagé + K heads fréquentiels, sortie (B, K, out_dim).
-LLAEModel     : surrogate + décodeur pour LLAE (pipeline LLAE).
+llae_surrogate.py — Surrogate LLAE : θ → ẑ_k (complexe) → Laplace⁻¹ → z(t) → décodeur → U(t).
 """
 import copy
 
@@ -11,8 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint as grad_ckpt
 
-from laplace_surrogate.models.encoder_decoder import ConvDecoder, ConvEncoder
-from laplace_surrogate.laplace_transform.learnable import LearnableLaplace
+from laplace_surrogate.models.surrogate_base import FreqSurrogate
 
 
 def _freeze(module: nn.Module) -> nn.Module:
@@ -21,98 +17,23 @@ def _freeze(module: nn.Module) -> nn.Module:
     return module
 
 
-def _make_mlp(in_dim: int, hidden_dim: int, out_dim: int, n_layers: int) -> nn.Sequential:
-    layers = []
-    for i in range(n_layers):
-        d_in  = in_dim    if i == 0            else hidden_dim
-        d_out = out_dim   if i == n_layers - 1 else hidden_dim
-        layers.append(nn.Linear(d_in, d_out))
-        if i < n_layers - 1:
-            layers.append(nn.LayerNorm(hidden_dim))
-            layers.append(nn.GELU())
-    return nn.Sequential(*layers)
-
-
-class LLAESurrogate(nn.Module):
-    """
-    Trunk MLP partagé (θ → h) + K FFN heads par fréquence (h → z_k).
-
-    Conditionnement fréquentiel : encoding sinusoïdal de k/(K-1) concaténé à h
-    avant chaque head.
-
-    Paramètres
-    ----------
-    theta_dim  : dimension de θ (entrée)
-    out_dim    : dimension de sortie par fréquence
-    K          : nombre de fréquences de Laplace
-    shared_dim : largeur du trunk
-    head_dim   : largeur cachée de chaque head
-    n_trunk    : nombre de couches Linear dans le trunk
-    n_head     : nombre de couches Linear dans chaque head (≥ 2)
-    freq_L     : niveaux sinusoïdaux pour l'encoding fréquentiel
-    """
-
-    def __init__(
-        self,
-        theta_dim  : int,
-        out_dim    : int,
-        K          : int,
-        shared_dim : int = 256,
-        head_dim   : int = 128,
-        n_trunk    : int = 4,
-        n_head     : int = 2,
-        freq_L     : int = 6,
-    ):
-        super().__init__()
-        self.K      = K
-        self.freq_L = freq_L
-        freq_cond   = 2 * freq_L
-
-        trunk_layers = []
-        for i in range(n_trunk):
-            d_in = theta_dim if i == 0 else shared_dim
-            trunk_layers += [nn.Linear(d_in, shared_dim), nn.LayerNorm(shared_dim), nn.GELU()]
-        self.trunk = nn.Sequential(*trunk_layers)
-
-        self.heads = nn.ModuleList([
-            _make_mlp(shared_dim + freq_cond, head_dim, out_dim, n_head)
-            for _ in range(K)
-        ])
-
-        freq_ratios = torch.arange(K).float() / max(K - 1, 1)
-        self.register_buffer('_freq_ratios', freq_ratios)
-
-    def _sinenc(self, ratios: torch.Tensor) -> torch.Tensor:
-        freqs = (2.0 ** torch.arange(self.freq_L, device=ratios.device, dtype=ratios.dtype)) * torch.pi
-        x = ratios[:, None] * freqs[None, :]
-        return torch.cat([x.sin(), x.cos()], dim=1)
-
-    def forward(self, theta: torch.Tensor) -> torch.Tensor:
-        """theta: (B, theta_dim) → (B, K, out_dim)"""
-        h        = self.trunk(theta)
-        freq_enc = self._sinenc(self._freq_ratios)
-        B = h.shape[0]
-        outs = []
-        for k, head in enumerate(self.heads):
-            e_k = freq_enc[k].unsqueeze(0).expand(B, -1)
-            outs.append(head(torch.cat([h, e_k], dim=1)))
-        return torch.stack(outs, dim=1)
-
-
 class LLAEModel(nn.Module):
     """
-    Surrogate θ → U_rec pour LLAE.
+    Surrogate end-to-end LLAE.
 
-    Trainable : LLAESurrogate (θ → ẑ_pred) + ConvDecoder(1) (z̃ → U)
-    Gelé      : ConvEncoder(1) + LearnableLaplace (cibles latentes pendant le train)
+    Trainable : FreqSurrogate (θ → ẑ_pred) + ConvDecoder (z̃ → U)
+    Gelé      : ConvEncoder + LearnableLaplace
+
+    Constructeur : LLAEModel(ae, theta_dim, hidden_dim, head_dim, n_trunk, n_head, freq_L)
+    Les paramètres de l'AE (latent_dim, K, Nt) sont lus depuis l'objet ae.
     """
 
     def __init__(
         self,
         ae,
         theta_dim  : int,
-        shared_dim : int = 256,
-        head_dim   : int = 128,
+        hidden_dim : int = 512,
+        head_dim   : int = 256,
         n_trunk    : int = 4,
         n_head     : int = 2,
         freq_L     : int = 6,
@@ -123,12 +44,18 @@ class LLAEModel(nn.Module):
         self.latent_dim = D
         self.K          = K
         self.Nt         = ae.Nt
+        self.hidden_dim = hidden_dim
+        self.head_dim   = head_dim
+        self.n_trunk    = n_trunk
+        self.n_head     = n_head
+        self.freq_L     = freq_L
 
-        self.surrogate = LLAESurrogate(
-            theta_dim, 2 * D, K, shared_dim, head_dim, n_trunk, n_head, freq_L,
+        self.surrogate = FreqSurrogate(
+            theta_dim=theta_dim, out_dim=2 * D, K=K,
+            hidden_dim=hidden_dim, head_dim=head_dim,
+            n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
         self.decoder = copy.deepcopy(ae.decoder)
-
         self.encoder = _freeze(copy.deepcopy(ae.encoder))
         self.laplace  = _freeze(copy.deepcopy(ae.laplace))
 
