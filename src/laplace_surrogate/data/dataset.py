@@ -89,8 +89,6 @@ class TransientDataset(Dataset):
         self.U_mean:     np.ndarray  | None = None
         self.U_std:      np.ndarray  | None = None
         self.U_laplace:  np.ndarray  | None = None
-        self._lap_mean:  np.ndarray  | None = None
-        self._lap_std:   np.ndarray  | None = None
 
     # ------------------------------------------------------------------
     # Fit
@@ -161,12 +159,6 @@ class TransientDataset(Dataset):
             np.save(str(lap_path), out)
             self.U_laplace = np.load(str(lap_path), mmap_mode='r')
 
-        # Normalisation sur le train
-        lap_train = self.U_laplace[train_idx]  # (n_train, K, 2, N, N)
-        self._lap_mean = lap_train.mean(axis=(0, 3, 4), keepdims=True).astype(np.float32)  # (1, K, 2, 1, 1)
-        self._lap_std  = lap_train.std( axis=(0, 3, 4), keepdims=True).astype(np.float32)
-        self._lap_std  = np.where(self._lap_std < 1e-8, 1.0, self._lap_std)
-
     # ------------------------------------------------------------------
     # Dataset interface
     # ------------------------------------------------------------------
@@ -179,7 +171,6 @@ class TransientDataset(Dataset):
 
         if self.laplace:
             u_lap = self.U_laplace[idx].copy()    # (K, 2, N, N)
-            u_lap = (u_lap - self._lap_mean[0]) / self._lap_std[0]
             return theta_norm, torch.from_numpy(u_lap).float()
         else:
             if self._U_raw is not None:
