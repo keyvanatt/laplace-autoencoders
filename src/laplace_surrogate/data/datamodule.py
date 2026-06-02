@@ -96,6 +96,35 @@ class _TimeSeqDataset(Dataset):
 
 
 # ---------------------------------------------------------------------------
+# Dataset interne — phase surrogate SLAE et LLAE
+# ---------------------------------------------------------------------------
+
+class _SurrogateSeqDataset(Dataset):
+    """
+    Retourne (theta_norm, U_norm) où U_norm = (U - U_mean) / U_std.
+    Utilisé pour les surrogates SLAE et LLAE.
+    """
+
+    def __init__(self, dataset, theta_norm: torch.Tensor, indices):
+        self._ds        = dataset
+        self.theta_norm = theta_norm.cpu()
+        self._indices   = [int(i) for i in indices]
+
+    def __len__(self):
+        return len(self._indices)
+
+    def __getitem__(self, idx):
+        sim_i = self._indices[idx]
+        th = self.theta_norm[sim_i]
+        if self._ds._U_raw is not None:
+            u = self._ds._load_u(sim_i)
+        else:
+            u = self._ds.U[sim_i].numpy()
+        u_norm = (u - self._ds.U_mean) / self._ds.U_std
+        return th, torch.from_numpy(u_norm).float()  # (Nt, N, N)
+
+
+# ---------------------------------------------------------------------------
 # Dataset interne — phase corrector
 # ---------------------------------------------------------------------------
 
@@ -219,7 +248,9 @@ class TransientDataModule(pl.LightningDataModule):
 
         model_name = self.cfg.model.get('name', 'slae')
         # LLAE encode dans le domaine temporel : pas besoin de la transformée de Laplace
-        laplace = self.mode == 'surrogate' or (self.mode == 'ae' and model_name != 'llae')
+        # Pour le surrogate SLAE on garde laplace=True pour calculer _lap_mean/_lap_std (stats seules)
+        laplace = (self.mode == 'surrogate' and model_name != 'llae') or \
+                  (self.mode == 'ae' and model_name != 'llae')
 
         # s_list pour la transformée de Laplace
         s_list = None
@@ -269,19 +300,13 @@ class TransientDataModule(pl.LightningDataModule):
             self.val_dataset   = _LaplaceFlatDataset(U, self.val_idx,   K)
 
         elif self.mode == 'surrogate':
-            print("Chargement Laplace en RAM...", end=' ', flush=True)
-            t0 = time.perf_counter()
-            U = np.ascontiguousarray(self.dataset.U_laplace)
-            self.dataset.U_laplace = U
-            print(f"OK — {U.nbytes / 1e9:.1f} Go, {time.perf_counter() - t0:.1f}s")
-
             theta_norm = torch.tensor(
                 (self.dataset.theta.numpy() - self.dataset.theta_mean.numpy())
                 / self.dataset.theta_std.numpy(),
                 dtype=torch.float32,
             )
-            self.train_dataset = _SurrogateDataset(U, theta_norm, self.train_idx)
-            self.val_dataset   = _SurrogateDataset(U, theta_norm, self.val_idx)
+            self.train_dataset = _SurrogateSeqDataset(self.dataset, theta_norm, self.train_idx)
+            self.val_dataset   = _SurrogateSeqDataset(self.dataset, theta_norm, self.val_idx)
 
         elif self.mode == 'corrector':
             U_pred, U_true = precompute(

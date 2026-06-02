@@ -10,7 +10,7 @@ Pipeline :
       G(t) = z(t) @ V  →  [n, Nt, k_svd]
       Ĝ(k) = laplace.forward_transform(G)  →  [n, K, k_svd] complex
   Phase 3 — entraîne LSLAE :
-      θ → LLAESurrogate → Ĝ_norm [B, K, k_svd, 2]
+      θ → FreqSurrogate → Ĝ_norm [B, K, k_svd, 2]
       → dénorm → Ĝ_phys [B, K, k_svd] complex
       → laplace.inverse_transform → G̃(t) [B, Nt, k_svd]
       → @ V.T → z̃(t) [B, Nt, D] → ConvDecoder(t_ratio) → Û_norm(t) [B, Nt, N, N]
@@ -22,28 +22,20 @@ import torch.nn.functional as F
 from laplace_surrogate.models.base import BaseDecoder
 from laplace_surrogate.models.encoder_decoder import ConvDecoder
 from laplace_surrogate.laplace_transform.learnable import LearnableLaplace
-from laplace_surrogate.models.llae_surrogate import LLAESurrogate
+from laplace_surrogate.models.surrogate_base import FreqSurrogate
 
 
 class LSLAE(BaseDecoder):
     """
-    Latent SVD Laplace AE (LSLAE).
+    Surrogate end-to-end LSLAE.
 
-    Surrogate θ → Û(t) via base SVD espace latent + transformée de Laplace régularisée.
+    Paramètres appris :
+      V          [latent_dim, k_svd]   base SVD (initialisée offline, fine-tunée)
+      surrogate  FreqSurrogate  θ → Ĝ_norm [B, K, k_svd*2]
+      decoder    ConvDecoder (poids copiés depuis LLAE, fine-tunés)
 
-    Paramètre appris :
-      V     [latent_dim, k_svd]   base SVD (initialisée offline, fine-tunée end-to-end)
-      proj  LLAESurrogate  θ_norm → Ĝ_norm [B, K, k_svd, 2]
-      decoder  ConvDecoder
-
-    Paramètres
-    ----------
-    N, Nt, theta_dim, latent_dim : doivent correspondre au LLAE source
-    k_svd  : nombre de modes SVD retenus
-    K      : nombre de fréquences Laplace (doit correspondre à l'AE source)
-    dt     : pas de temps
-    gamma_init : amortissement initial (écrasé par load_laplace_from_ae)
-    time_L : niveaux FiLM (doit correspondre au LLAE source)
+    Paramètres issus de l'AE (chargés via load_ae_decoder / load_laplace_from_ae) :
+      latent_dim, K, dt, time_L — doivent correspondre au LLAE source
     """
 
     def __init__(
@@ -57,8 +49,8 @@ class LSLAE(BaseDecoder):
         dt         : float = 1.0,
         gamma_init : float = 1e-2,
         time_L     : int   = 8,
-        shared_dim : int   = 256,
-        head_dim   : int   = 128,
+        hidden_dim : int   = 512,
+        head_dim   : int   = 256,
         n_trunk    : int   = 4,
         n_head     : int   = 2,
         freq_L     : int   = 6,
@@ -69,7 +61,11 @@ class LSLAE(BaseDecoder):
         self.k_svd      = k_svd
         self.latent_dim = latent_dim
         self.K          = K
-        self.dt         = dt
+        self.hidden_dim = hidden_dim
+        self.head_dim   = head_dim
+        self.n_trunk    = n_trunk
+        self.n_head     = n_head
+        self.freq_L     = freq_L
 
         self.laplace = LearnableLaplace(K, dt, Nt, gamma_init=gamma_init, learnable=False)
 
@@ -82,16 +78,15 @@ class LSLAE(BaseDecoder):
         self.register_buffer('theta_mean', torch.zeros(theta_dim))
         self.register_buffer('theta_std',  torch.ones( theta_dim))
 
-        self.proj = LLAESurrogate(
+        self.surrogate = FreqSurrogate(
             theta_dim=theta_dim, out_dim=k_svd * 2, K=K,
-            shared_dim=shared_dim, head_dim=head_dim,
+            hidden_dim=hidden_dim, head_dim=head_dim,
             n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
 
         self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
 
     def set_svd_basis(self, V):
-        """V : Tensor ou ndarray (latent_dim, k_svd). Initialise le paramètre V."""
         if not isinstance(V, torch.Tensor):
             V = torch.tensor(V, dtype=torch.float32)
         with torch.no_grad():
@@ -108,11 +103,11 @@ class LSLAE(BaseDecoder):
         self.theta_std.copy_( _t(theta_std))
 
     def load_ae_decoder(self, ae):
-        """Copie les poids du décodeur depuis un LLAE (entraînable)."""
+        """Copie les poids du décodeur depuis un LLAE entraîné."""
         self.decoder.load_state_dict(ae.decoder.state_dict())
 
     def load_laplace_from_ae(self, ae):
-        """Copie les paramètres Laplace (s_k, α_t, λ) depuis un LLAE et gèle."""
+        """Copie les paramètres Laplace depuis un LLAE et gèle la transformée."""
         self.laplace.s_re.data.copy_(ae.laplace.s_re.data)
         self.laplace.s_im.data.copy_(ae.laplace.s_im.data)
         self.laplace.log_alpha_t.data.copy_(ae.laplace.log_alpha_t.data)
@@ -132,8 +127,8 @@ class LSLAE(BaseDecoder):
         return self.decoder(flat, t_ratios).view(B, Nt, self.N, self.N)
 
     def _forward_full(self, theta_norm):
-        B = theta_norm.shape[0]
-        G_hat_norm = self.proj(theta_norm).view(B, self.K, self.k_svd, 2)
+        B          = theta_norm.shape[0]
+        G_hat_norm = self.surrogate(theta_norm).view(B, self.K, self.k_svd, 2)
         G_hat_ri   = G_hat_norm * self.G_hat_std + self.G_hat_mean
         G_hat_phys = torch.complex(G_hat_ri[..., 0], G_hat_ri[..., 1])
         G_tilde    = self.laplace.inverse_transform(G_hat_phys, self.Nt)
@@ -149,9 +144,9 @@ class LSLAE(BaseDecoder):
         U_pred, G_hat_norm = self._forward_full(theta_norm)
 
         with torch.no_grad():
-            G_true     = z_true.float() @ self.V.detach()
-            G_hat_true = self.laplace.forward_transform(G_true)
-            G_hat_true_ri = torch.stack([G_hat_true.real, G_hat_true.imag], dim=-1)
+            G_true          = z_true.float() @ self.V.detach()
+            G_hat_true      = self.laplace.forward_transform(G_true)
+            G_hat_true_ri   = torch.stack([G_hat_true.real, G_hat_true.imag], dim=-1)
             G_hat_true_norm = (G_hat_true_ri - self.G_hat_mean) / self.G_hat_std
 
         return U_pred, G_hat_norm, G_hat_true_norm

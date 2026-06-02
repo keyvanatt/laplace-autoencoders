@@ -92,11 +92,12 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
     # ------------------------------------------------------------------
 
     def _build_model(self, dm):
-        from laplace_surrogate.models.llae import LLAE
         from laplace_surrogate.models.lslae import LSLAE
+        from laplace_surrogate.laplace_transform.learnable import LearnableLaplace
 
         cfg_m = self.cfg.model
         cfg_t = self.cfg.training
+        cfg_d = self.cfg.data
 
         ds        = dm.dataset
         N, Nt, K  = ds.N, ds.Nt, ds.K
@@ -105,15 +106,19 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # ── Chargement LLAE (encoder gelé) ───────────────────────────────────
-        ae_ck = torch.load(cfg_t.ae_ckpt, map_location='cpu', weights_only=False)
-        ae = LLAE(
-            N=N, Nt=Nt, latent_dim=cfg_m.latent_dim, K=K, dt=cfg_m.dt,
-            time_L=cfg_m.time_L,
-        )
-        ae.load_state_dict(ae_ck['model_state'])
-        ae.eval()
-        for p in ae.parameters():
-            p.requires_grad_(False)
+        from laplace_surrogate.lightning.ckpt_utils import load_llae_from_ckpt
+        ae, latent_dim, dt, time_L = load_llae_from_ckpt(cfg_t.ae_ckpt, N, Nt, K)
+
+        # Laplace avec les pôles du dataset (ds.s) — pour inverser U_laplace_norm du batch.
+        data_laplace = LearnableLaplace(K=K, dt=dt, Nt=Nt, learnable=False,
+                                        alpha_t=cfg_t.alpha_t, lam=cfg_t.lam)
+        data_laplace.s_re.data.copy_(torch.tensor(ds.s.real, dtype=torch.float32))
+        data_laplace.s_im.data.copy_(torch.tensor(ds.s.imag, dtype=torch.float32))
+        data_laplace.requires_grad_(False)
+        self._data_laplace = data_laplace
+        self._ae_latent_dim = latent_dim
+        self._ae_dt         = dt
+        self._ae_time_L     = time_L
         ae.to(device)
 
         # ── Phase 2 : encodage offline ───────────────────────────────────────
@@ -135,12 +140,12 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
         # ── Modèle LSLAE ─────────────────────────────────────────────────────
         model = LSLAE(
             N=N, Nt=Nt, theta_dim=theta_dim,
-            latent_dim=cfg_m.latent_dim,
+            latent_dim=latent_dim,
             k_svd=cfg_t.k_svd,
-            K=K, dt=cfg_m.dt,
-            gamma_init=cfg_m.gamma_init,
-            time_L=cfg_m.time_L,
-            shared_dim=cfg_t.shared_dim,
+            K=K, dt=dt,
+            gamma_init=cfg_m.get('gamma_init', 0.0),
+            time_L=time_L,
+            hidden_dim=cfg_t.hidden_dim,
             head_dim=cfg_t.head_dim,
             n_trunk=cfg_t.n_trunk,
             n_head=cfg_t.n_head,
@@ -235,9 +240,9 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
     def configure_optimizers(self):
         cfg_t = self.cfg.training
         param_groups = [
-            {'params': self.model.proj.parameters(),    'lr': cfg_t.lr_proj},
-            {'params': self.model.decoder.parameters(), 'lr': cfg_t.lr_decoder},
-            {'params': [self.model.V],                  'lr': cfg_t.lr_V},
+            {'params': self.model.surrogate.parameters(), 'lr': cfg_t.lr_surrogate},
+            {'params': self.model.decoder.parameters(),   'lr': cfg_t.lr_decoder},
+            {'params': [self.model.V],                    'lr': cfg_t.lr_V},
         ]
         optimizer = torch.optim.AdamW(param_groups, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -268,18 +273,21 @@ class LSLAESurrogateLightningModule(pl.LightningModule):
             'Nt':          m.Nt,
             'N':           ds.N,
             'theta_dim':   ds.theta_dim,
-            'latent_dim':  cfg_m.latent_dim,
-            'k_svd':       cfg_t.k_svd,
-            'dt':          cfg_m.dt,
-            'time_L':      cfg_m.time_L,
-            'shared_dim':  cfg_t.shared_dim,
-            'head_dim':    cfg_t.head_dim,
-            'n_trunk':     cfg_t.n_trunk,
-            'n_head':      cfg_t.n_head,
-            'freq_L':      cfg_t.freq_L,
+            'latent_dim':  self._ae_latent_dim,
+            'k_svd':       m.k_svd,
+            'dt':          self._ae_dt,
+            'time_L':      self._ae_time_L,
+            'hidden_dim':  m.hidden_dim,
+            'head_dim':    m.head_dim,
+            'n_trunk':     m.n_trunk,
+            'n_head':      m.n_head,
+            'freq_L':      m.freq_L,
             'U_mean':      ds.U_mean,
             'U_std':       ds.U_std,
             'theta_mean':  ds.theta_mean,
             'theta_std':   ds.theta_std,
             'test_idx':    np.asarray(dm.test_idx),
+            'model_state': {k[len('model.'):]: v
+                            for k, v in checkpoint['state_dict'].items()
+                            if k.startswith('model.')},
         })

@@ -1,0 +1,14 @@
+# Architecture partagée du surrogate MLP (trunk + heads FreqSurrogate).
+# Référencé par defaults dans surrogate_slae/llae/lslae.yaml.
+hidden_dim: 512
+head_dim:   256
+n_trunk:    4
+n_head:     2
+freq_L:     6
+
+# Loss : poids de la supervision latente vs spatiale
+alpha_lat: 1.0
+
+# Paramètres de régularisation Tikhonov pour l'inversion de Laplace du batch
+alpha_t: 0.007
+lam:     3.0e-5

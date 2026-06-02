@@ -74,7 +74,13 @@ class InferencePipeline:
             model.eval()
             return cls(model, ckpt, device)
 
-        state = ckpt['model_state']
+        # Supporte les deux formats : direct (.pt custom) et Lightning (.ckpt)
+        if 'model_state' in ckpt:
+            state = ckpt['model_state']
+        else:
+            # Lightning sauvegarde sous 'state_dict' avec le préfixe 'model.'
+            state = {k[len('model.'):]: v for k, v in ckpt['state_dict'].items()
+                     if k.startswith('model.')}
         if any(k.startswith('_orig_mod.') for k in state):
             state = {k[len('_orig_mod.'):]: v for k, v in state.items()}
         model.load_state_dict(state)
@@ -170,14 +176,16 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             N=ckpt['N'], Nt=ckpt['Nt'], latent_dim=ckpt['latent_dim'], K=ckpt['K'],
             dt=ckpt['dt'], time_L=ckpt.get('time_L', 8),
         ).to(device)
+        hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
         return LLAEModel(
             ae=ae_dummy, theta_dim=ckpt['theta_dim'],
-            shared_dim=ckpt['shared_dim'], head_dim=ckpt['head_dim'],
+            hidden_dim=hidden_dim, head_dim=ckpt['head_dim'],
             n_trunk=ckpt['n_trunk'], n_head=ckpt['n_head'], freq_L=ckpt['freq_L'],
         ).to(device)
 
     elif model_type == 'LSLAEModel':
         from laplace_surrogate.models.lslae import LSLAE
+        hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
         return LSLAE(
             N          = ckpt['N'],
             Nt         = ckpt['Nt'],
@@ -187,7 +195,7 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             K          = ckpt['K'],
             dt         = ckpt['dt'],
             time_L     = ckpt.get('time_L', 8),
-            shared_dim = ckpt['shared_dim'],
+            hidden_dim = hidden_dim,
             head_dim   = ckpt['head_dim'],
             n_trunk    = ckpt['n_trunk'],
             n_head     = ckpt['n_head'],

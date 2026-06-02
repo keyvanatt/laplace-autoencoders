@@ -1,19 +1,10 @@
 name: lslae
 
-# Architecture LSLAE (Latent SVD Laplace AE)
+# Paramètres pour le DataModule (construction de la transformée de Laplace)
 N: 128
 Nt: 150
-theta_dim: 3
-latent_dim: 64
-k_svd: 32        # modes SVD retenus (article Table 1 : d_SVD=32)
 K: 16            # fréquences Laplace (doit correspondre au LLAE source)
-dt: 1.0
-gamma_init: 0.01
-time_L: 8
+gamma_init: 0.01 # amortissement initial du contour de Bromwich
 
-# Surrogate trunk+heads
-shared_dim: 256
-head_dim: 128
-n_trunk: 4
-n_head: 2
-freq_L: 6
+# latent_dim, dt, time_L → lus depuis le checkpoint AE (ckpt_utils.load_llae_from_ckpt)
+# Architecture du surrogate (hidden_dim, head_dim, …) → dans training/surrogate_lslae.yaml
