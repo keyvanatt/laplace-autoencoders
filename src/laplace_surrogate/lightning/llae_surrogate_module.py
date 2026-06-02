@@ -43,6 +43,7 @@ class LLAESurrogateLightningModule(pl.LightningModule):
             n_trunk=cfg_t.n_trunk,
             n_head=cfg_t.n_head,
             freq_L=cfg_t.freq_L,
+            learnable_laplace=bool(self.cfg.model.get('learnable_laplace', False)),
         )
 
     # ------------------------------------------------------------------
@@ -88,6 +89,9 @@ class LLAESurrogateLightningModule(pl.LightningModule):
         param_groups = [{'params': self.model.surrogate.parameters(), 'lr': cfg_t.lr_surrogate}]
         if cfg_t.lr_decoder > 0.0:
             param_groups.append({'params': self.model.decoder.parameters(), 'lr': cfg_t.lr_decoder})
+        if self.model.learnable_laplace:
+            lr_laplace = float(cfg_t.get('lr_laplace', 1e-5))
+            param_groups.append({'params': self.model.laplace.parameters(), 'lr': lr_laplace})
         optimizer = torch.optim.AdamW(param_groups, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=0.5, patience=15, min_lr=1e-6,

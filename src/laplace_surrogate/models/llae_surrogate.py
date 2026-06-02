@@ -22,33 +22,37 @@ class LLAEModel(nn.Module):
     Surrogate end-to-end LLAE.
 
     Trainable : FreqSurrogate (θ → ẑ_pred) + ConvDecoder (z̃ → U)
-    Gelé      : ConvEncoder + LearnableLaplace
+                + optionnellement LearnableLaplace si learnable_laplace=True
+    Gelé      : ConvEncoder (toujours)
 
-    Constructeur : LLAEModel(ae, theta_dim, hidden_dim, head_dim, n_trunk, n_head, freq_L)
+    Constructeur : LLAEModel(ae, theta_dim, hidden_dim, head_dim, n_trunk, n_head, freq_L,
+                              learnable_laplace)
     Les paramètres de l'AE (latent_dim, K, Nt) sont lus depuis l'objet ae.
     """
 
     def __init__(
         self,
         ae,
-        theta_dim  : int,
-        hidden_dim : int = 512,
-        head_dim   : int = 256,
-        n_trunk    : int = 4,
-        n_head     : int = 2,
-        freq_L     : int = 6,
+        theta_dim         : int,
+        hidden_dim        : int  = 512,
+        head_dim          : int  = 256,
+        n_trunk           : int  = 4,
+        n_head            : int  = 2,
+        freq_L            : int  = 6,
+        learnable_laplace : bool = False,
     ):
         super().__init__()
         D  = ae.latent_dim
         K  = ae.laplace.K
-        self.latent_dim = D
-        self.K          = K
-        self.Nt         = ae.Nt
-        self.hidden_dim = hidden_dim
-        self.head_dim   = head_dim
-        self.n_trunk    = n_trunk
-        self.n_head     = n_head
-        self.freq_L     = freq_L
+        self.latent_dim       = D
+        self.K                = K
+        self.Nt               = ae.Nt
+        self.hidden_dim       = hidden_dim
+        self.head_dim         = head_dim
+        self.n_trunk          = n_trunk
+        self.n_head           = n_head
+        self.freq_L           = freq_L
+        self.learnable_laplace = learnable_laplace
 
         self.surrogate = FreqSurrogate(
             theta_dim=theta_dim, out_dim=2 * D, K=K,
@@ -57,12 +61,15 @@ class LLAEModel(nn.Module):
         )
         self.decoder = copy.deepcopy(ae.decoder)
         self.encoder = _freeze(copy.deepcopy(ae.encoder))
-        self.laplace  = _freeze(copy.deepcopy(ae.laplace))
+        self.laplace = copy.deepcopy(ae.laplace)
+        if not learnable_laplace:
+            _freeze(self.laplace)
 
     def train(self, mode: bool = True):
         super().train(mode)
         self.encoder.eval()
-        self.laplace.eval()
+        if not self.learnable_laplace:
+            self.laplace.eval()
         return self
 
     @torch.no_grad()
