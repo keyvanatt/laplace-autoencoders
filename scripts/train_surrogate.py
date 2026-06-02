@@ -34,6 +34,7 @@ def main(cfg: DictConfig):
 
     from laplace_surrogate.data.datamodule import TransientDataModule
 
+    import torch
     pl.seed_everything(cfg.seed, workers=True)
     torch.backends.cudnn.benchmark = True
 
@@ -43,13 +44,12 @@ def main(cfg: DictConfig):
     mod_path, cls_name, model_cls = _SURROGATE_MODULES[model_name]
     LightningModule = getattr(importlib.import_module(mod_path), cls_name)
 
-    # Lit K et gamma_init depuis le checkpoint AE, avant dm.setup() qui en a besoin
+    # Lit K depuis le checkpoint AE, avant dm.setup() qui en a besoin
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
     from omegaconf import OmegaConf
     ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
     with OmegaConf.open_dict(cfg):
-        cfg.model.K          = ae_hparams['K']
-        cfg.model.gamma_init = ae_hparams['gamma_init']
+        cfg.model.K = ae_hparams['K']
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()

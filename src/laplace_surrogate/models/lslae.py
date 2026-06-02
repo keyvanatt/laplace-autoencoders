@@ -47,7 +47,6 @@ class LSLAE(BaseDecoder):
         k_svd      : int   = 16,
         K          : int   = 16,
         dt         : float = 1.0,
-        gamma_init : float = 1e-2,
         time_L     : int   = 8,
         hidden_dim : int   = 512,
         head_dim   : int   = 256,
@@ -67,7 +66,7 @@ class LSLAE(BaseDecoder):
         self.n_head     = n_head
         self.freq_L     = freq_L
 
-        self.laplace = LearnableLaplace(K, dt, Nt, gamma_init=gamma_init, learnable=False)
+        self.laplace = LearnableLaplace(K, dt, Nt, learnable=False)
 
         self.V = nn.Parameter(torch.zeros(latent_dim, k_svd))
 
