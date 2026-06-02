@@ -51,9 +51,10 @@ class LLAESurrogateLightningModule(pl.LightningModule):
         th, u_true_norm = batch                   # (B, 3), (B, Nt, N, N)
         U_rec, z_hat_pred, z_hat_true = self.model(th, u_true_norm)
 
-        alpha_lat = float(self.cfg.training.alpha_lat)
+        alpha_lat  = float(self.cfg.training.alpha_lat)
+        alpha_spat = float(self.cfg.training.alpha_spat)
         loss, metrics = self.model.loss(u_true_norm, U_rec, z_hat_pred, z_hat_true,
-                                        alpha_lat=alpha_lat)
+                                        alpha_lat=alpha_lat, alpha_spat=alpha_spat)
 
         with torch.no_grad():
             l2rel = ((U_rec.float() - u_true_norm).flatten(1).norm(dim=1)
@@ -69,9 +70,10 @@ class LLAESurrogateLightningModule(pl.LightningModule):
         th, u_true_norm = batch
         U_rec, z_hat_pred, z_hat_true = self.model(th, u_true_norm)
 
-        alpha_lat = float(self.cfg.training.alpha_lat)
+        alpha_lat  = float(self.cfg.training.alpha_lat)
+        alpha_spat = float(self.cfg.training.alpha_spat)
         loss, metrics = self.model.loss(u_true_norm, U_rec, z_hat_pred, z_hat_true,
-                                        alpha_lat=alpha_lat)
+                                        alpha_lat=alpha_lat, alpha_spat=alpha_spat)
         l2rel = ((U_rec.float() - u_true_norm).flatten(1).norm(dim=1)
                  / (u_true_norm.flatten(1).norm(dim=1) + 1e-8)).mean()
 
