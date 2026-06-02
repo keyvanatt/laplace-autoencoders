@@ -62,7 +62,10 @@ class LLAEModel(nn.Module):
         self.decoder = copy.deepcopy(ae.decoder)
         self.encoder = _freeze(copy.deepcopy(ae.encoder))
         self.laplace = copy.deepcopy(ae.laplace)
-        if not learnable_laplace:
+        if learnable_laplace:
+            for p in self.laplace.parameters():
+                p.requires_grad_(True)
+        else:
             _freeze(self.laplace)
 
     def train(self, mode: bool = True):
