@@ -1,6 +1,6 @@
 defaults:
   - model: llae
-  - training: ae
+  - training: surrogate_llae
   - data: combustion
   - eval: default
   - _self_

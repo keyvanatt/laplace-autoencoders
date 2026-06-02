@@ -248,7 +248,7 @@ class TransientDataModule(pl.LightningDataModule):
 
         model_name = self.cfg.model.get('name', 'slae')
         # LLAE encode dans le domaine temporel : pas besoin de la transformée de Laplace
-        # Pour le surrogate SLAE on garde laplace=True pour calculer _lap_mean/_lap_std (stats seules)
+        # Pour le surrogate SLAE on garde laplace=True pour avoir ds.s (les pôles de Laplace)
         laplace = (self.mode == 'surrogate' and model_name != 'llae') or \
                   (self.mode == 'ae' and model_name != 'llae')
 
