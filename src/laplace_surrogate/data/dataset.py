@@ -89,6 +89,9 @@ class TransientDataset(Dataset):
         self.U_mean:     np.ndarray  | None = None
         self.U_std:      np.ndarray  | None = None
         self.U_laplace:  np.ndarray  | None = None
+        # Normalisation Laplace par fréquence, pixel par pixel (K, 2, N, N)
+        self.lap_mean:   np.ndarray  | None = None
+        self.lap_std:    np.ndarray  | None = None
 
     # ------------------------------------------------------------------
     # Fit
@@ -134,30 +137,68 @@ class TransientDataset(Dataset):
             u = u_t.squeeze(1).numpy()
         return u   # (Nt, N, N)
 
-    def _compute_laplace(self, train_idx):
-        """Pré-calcule la transformée de Laplace pour toutes les sims et normalise sur le train."""
-        cache_dir = self._cache_dir
-        stem = Path(self._data_path).stem if self._U_raw is not None else 'npz'
-        idx_hash = hashlib.md5(np.array(sorted(train_idx)).tobytes()).hexdigest()[:8]
-        lap_path = cache_dir / f"{stem}_laplace_N{self.N}_s{self._s_hash}_trap_idx{idx_hash}.npy"
+    def _laplace_frame(self, i: int, s_t: torch.Tensor) -> np.ndarray:
+        """Calcule la transformée de Laplace brute de la sim i → (K, 2, N, N) float32."""
+        u = self._load_u(i) if self._U_raw is not None else self.U[i].numpy()
+        u_flat = torch.tensor(u.reshape(self.Nt, self.N * self.N).T, dtype=torch.float64)
+        uhat   = laplace_forward_tik(u_flat, s_t, self.dt, self._rule)  # (N², K) complex
+        uhat_np = uhat.numpy().reshape(self.N, self.N, self.K)
+        frame = np.empty((self.K, 2, self.N, self.N), dtype=np.float32)
+        frame[:, 0] = uhat_np.real.transpose(2, 0, 1)
+        frame[:, 1] = uhat_np.imag.transpose(2, 0, 1)
+        return frame
 
-        if lap_path.exists():
+    def _compute_laplace(self, train_idx):
+        """
+        Pré-calcule la transformée de Laplace (sans normalisation réel) et normalise
+        dans le domaine de Laplace fréquence par fréquence, pixel par pixel.
+
+        2 passes :
+          1. Stats (mean, std) calculées sur les sims d'entraînement.
+          2. Normalisation appliquée à toutes les sims → mmap.
+        """
+        cache_dir  = self._cache_dir
+        stem       = Path(self._data_path).stem if self._U_raw is not None else 'npz'
+        idx_hash   = hashlib.md5(np.array(sorted(train_idx)).tobytes()).hexdigest()[:8]
+        lap_path   = cache_dir / f"{stem}_laplace_N{self.N}_s{self._s_hash}_trap_idx{idx_hash}_lapnorm.npy"
+        stats_path = cache_dir / f"{stem}_laplace_N{self.N}_s{self._s_hash}_trap_idx{idx_hash}_lapstats.npz"
+
+        if lap_path.exists() and stats_path.exists():
             self.U_laplace = np.load(str(lap_path), mmap_mode='r')
-        else:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            out = np.zeros((self.ns, self.K, 2, self.N, self.N), dtype=np.float32)
-            s_t = torch.tensor(self._s_list, dtype=torch.complex128)
-            for i in tqdm(range(self.ns), desc='Laplace transform', leave=False):
-                u = self._load_u(i) if self._U_raw is not None else self.U[i].numpy()
-                u_norm = (u - self.U_mean) / self.U_std  # (Nt, N, N)
-                u_flat = torch.tensor(u_norm.reshape(self.Nt, self.N * self.N).T,
-                                      dtype=torch.float64)  # (N², Nt)
-                uhat = laplace_forward_tik(u_flat, s_t, self.dt, self._rule)  # (N², K) complex
-                uhat_np = uhat.numpy().reshape(self.N, self.N, self.K)
-                out[i, :, 0] = uhat_np[..., :].real.transpose(2, 0, 1)
-                out[i, :, 1] = uhat_np[..., :].imag.transpose(2, 0, 1)
-            np.save(str(lap_path), out)
-            self.U_laplace = np.load(str(lap_path), mmap_mode='r')
+            d = np.load(str(stats_path))
+            self.lap_mean = d['mean']   # (K, 2, N, N) float32
+            self.lap_std  = d['std']    # (K, 2, N, N) float32
+            return
+
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        s_t     = torch.tensor(self._s_list, dtype=torch.complex128)
+        n_train = len(train_idx)
+
+        # --- Passe 1 : stats sur les sims d'entraînement ---
+        lap_sum  = np.zeros((self.K, 2, self.N, self.N), dtype=np.float64)
+        lap_sum2 = np.zeros((self.K, 2, self.N, self.N), dtype=np.float64)
+        for i in tqdm(train_idx, desc='Laplace stats (1/2)', leave=False):
+            f = self._laplace_frame(i, s_t).astype(np.float64)
+            lap_sum  += f
+            lap_sum2 += f * f
+        lap_mean = (lap_sum / n_train).astype(np.float32)
+        lap_var  = np.maximum(lap_sum2 / n_train - lap_mean.astype(np.float64) ** 2, 0.0)
+        lap_std  = np.sqrt(lap_var).astype(np.float32)
+        lap_std  = np.where(lap_std < 1e-8, 1.0, lap_std)
+
+        # --- Passe 2 : normalise toutes les sims → mmap ---
+        out = np.lib.format.open_memmap(
+            str(lap_path), mode='w+', dtype=np.float32,
+            shape=(self.ns, self.K, 2, self.N, self.N),
+        )
+        for i in tqdm(range(self.ns), desc='Laplace normalise (2/2)', leave=False):
+            out[i] = (self._laplace_frame(i, s_t) - lap_mean) / lap_std
+        out.flush()
+
+        np.savez(str(stats_path), mean=lap_mean, std=lap_std)
+        self.U_laplace = np.load(str(lap_path), mmap_mode='r')
+        self.lap_mean  = lap_mean
+        self.lap_std   = lap_std
 
     # ------------------------------------------------------------------
     # Dataset interface

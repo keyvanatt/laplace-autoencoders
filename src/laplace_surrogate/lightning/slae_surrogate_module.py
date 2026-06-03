@@ -52,6 +52,10 @@ class SLAESurrogateLightningModule(pl.LightningModule):
         model.laplace.s_re.data.copy_(torch.tensor(ds.s.real, dtype=torch.float32))
         model.laplace.s_im.data.copy_(torch.tensor(ds.s.imag, dtype=torch.float32))
         model.laplace.requires_grad_(False)
+        # Normalisation Laplace
+        if ds.lap_mean is not None:
+            model.lap_mean.copy_(torch.tensor(ds.lap_mean, dtype=torch.float32))
+            model.lap_std.copy_( torch.tensor(ds.lap_std,  dtype=torch.float32))
 
         if cfg_t.lr_decoder > 0.0:
             model.shared_decoder.requires_grad_(True)

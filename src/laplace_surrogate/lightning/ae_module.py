@@ -159,3 +159,6 @@ class AELightningModule(pl.LightningModule):
         if hasattr(dm.dataset, 'dt'):
             checkpoint['dt'] = dm.dataset.dt
         checkpoint['rule'] = self.cfg.data.get('rule', 'trap')
+        if getattr(dm.dataset, 'lap_mean', None) is not None:
+            checkpoint['lap_mean'] = dm.dataset.lap_mean  # (K, 2, N, N) float32
+            checkpoint['lap_std']  = dm.dataset.lap_std
