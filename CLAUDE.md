@@ -6,35 +6,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 
 The project uses a local conda environment at `.conda/`. Always run scripts with:
 ```bash
-.conda/bin/python <script>
+PYTHONPATH=src .conda/bin/python <script>
 ```
 
-All scripts add their parent directory to `sys.path`, so they must be run from the repo root.
+All scripts insert `src/` into `sys.path` themselves, but must be run from the repo root.
 
 ## Repository Layout
 
-The transient code has been fully migrated into `src/laplace_surrogate/`. The legacy `transient/`, `models/`, and `utils/` folders were removed.
-
 ```text
 src/laplace_surrogate/
-  data/         dataset.py, datamodule.py (LightningDataModule)
-  models/       slae, llae, lslae, surrogate, corrector, laplace_svd,
-                svd_surrogate, laplace_model, laplace_ffn, tucker_pod, base
-  transform/    forward.py, inverse.py, learnable.py (LearnableLaplace)
-  lightning/    ae_module, surrogate_module, corrector_module
-  inference/    pipeline.py (InferencePipeline.from_checkpoint)
-  utils/        visualization.py, rotate.py, make_split.py
+  data/               dataset.py, datamodule.py (LightningDataModule)
+  models/             slae.py, llae.py, lslae.py
+                      slae_surrogate.py, llae_surrogate.py
+                      corrector.py, encoder_decoder.py, surrogate_base.py, base.py
+  laplace_transform/  forward.py, inverse.py, learnable.py  ← real location
+  transform/          forward.py, inverse.py, learnable.py  ← compatibility shim only
+  lightning/          ae_module.py, slae_surrogate_module.py,
+                      llae_surrogate_module.py, lslae_surrogate_module.py,
+                      corrector_module.py, ckpt_utils.py
+  inference/          pipeline.py (InferencePipeline.from_checkpoint)
+  utils/              visualization.py, rotate.py, make_split.py
 
 configs/
-  model/        slae.yaml, laplace_latent.yaml
-  training/     autoencoder.yaml, surrogate.yaml, corrector.yaml
-  data/         combustion.yaml
-  eval/         default.yaml
-  experiment/   ablation_{latent_dim,kmax,gamma}.yaml
-  config.yaml   (Hydra root)
+  config.yaml         (Hydra root — default: model=llae, training=surrogate_llae)
+  model/              slae.yaml, llae.yaml, lslae.yaml
+  training/           ae.yaml, surrogate_slae.yaml, surrogate_llae.yaml,
+                      surrogate_lslae.yaml, corrector.yaml
+  data/               combustion.yaml
+  eval/               default.yaml
 
 scripts/
-  train_ae.py, train_surrogate.py, train_corrector.py, evaluate.py
+  train_ae.py         Phase 1 — train SLAE, LLAE, or LSLAE autoencoder
+  train_surrogate.py  Phase 2 — train end-to-end surrogate θ→z→U(t)
+  train_corrector.py  Phase 3 — train optional residual corrector
+  evaluate.py         Evaluation from checkpoint
+  laplace_opti.py     Standalone Laplace pole optimisation
 
 app/
   streamlit_app.py, requirements-app.txt
@@ -45,7 +51,7 @@ tests/
 
 ## Dataset
 
-The target is transient CH4 concentration fields `U(t)` as a function of the physical parameters `θ = (k, A, C)`. The main dataset is `dataset/ch4_rotated.npy` (8,100 simulations, 150 time steps, 200×200 grids).
+Target: transient CH4 concentration fields `U(t)` as a function of physical parameters `θ = (k, A, C)`. Dataset: `dataset/ch4_rotated.npy` (8 100 simulations, 150 time steps, 200×200 grids).
 
 `src/laplace_surrogate/data/dataset.py` exposes `TransientDataset(data_path, laplace, s_list, rule, dt, interp_size)`.
 
@@ -53,130 +59,115 @@ The target is transient CH4 concentration fields `U(t)` as a function of the phy
 - `laplace=True`: applies the Laplace transform and returns `(theta_norm, U_laplace_norm)` with shape `(K, 2, N, N)`.
 - Call `dataset.fit(train_indices)` before training to compute normalization statistics.
 
-## Pipelines From The Article
+## AE Families
 
-The article compares one linear baseline, three Laplace-domain surrogate families, and a final correction stage.
+Three autoencoder families are implemented. All share the same convolutional backbone (`ConvEncoder`, `ConvDecoder` in `encoder_decoder.py`) and the same training entry point (`train_ae.py`), controlled by `model=slae|llae|lslae`.
 
-### Pipeline 1: Tucker POD / SVDSurrogate
+### SLAE — Spatial Laplace AE
 
-This is the linear baseline. Time-series snapshots are compressed with a Tucker/POD basis, the surrogate predicts the reduced coefficients from `θ`, and the result is reconstructed in physical time.
+The Laplace transform is applied first in the physical domain, then each complex frequency frame is encoded/decoded independently with a frequency-conditioned convolutional AE.
 
-- Main class: `src/laplace_surrogate/models/tucker_pod.py` -> `TuckerPODModel`
-- Wrapper class: `src/laplace_surrogate/models/svd_surrogate.py` -> `SVDSurrogate`
-- Limitation: linear basis truncation error, especially on sharp transients
+- Class: `src/laplace_surrogate/models/slae.py` → `SLAE`
+- Conditioning: sinusoidal frequency encoding + FiLM
+- Data flow: `U(t) → L → Û(s_k) → Encoder → z(s_k) → Decoder → L⁻¹ → Û_rec(t)`
+- Surrogate model: `SLAEModel` (`slae_surrogate.py`)
 
-### Pipeline 2: LaplaceSVDModel
+### LLAE — Latent Laplace AE
 
-This baseline keeps the Laplace-domain structure but uses a truncated SVD representation per frequency. It is still a linear compression strategy, but frequency-aware.
+Time-domain frames are encoded into a latent sequence first, then the Laplace transform is applied in latent space.
 
-- Main class: `src/laplace_surrogate/models/laplace_svd.py` -> `LaplaceSVDModel`
-- Role: Laplace-domain linear baseline
-- Limitation: truncation error from the spatial basis, and no learned non-linear compression
-
-### Pipeline 3: LaplaceFFNModel / LaplaceModel style direct surrogate
-
-This family predicts Laplace-domain quantities directly with independent frequency heads. It is the simplest Laplace surrogate family and a useful comparison point against the AE-based pipelines.
-
-- Main class: `src/laplace_surrogate/models/laplace_ffn.py` -> `LaplaceFFNModel`
-- Legacy naming in the article/codebase: `LaplaceModel`
-- Role: direct multi-head Laplace surrogate
-- Limitation: weaker compression than AE-based models, higher burden on the surrogate heads
-
-### Pipeline 4: SLAE
-
-Spatial Laplace AE. The Laplace transform is applied in the physical domain first, then each complex frequency frame is encoded and decoded independently with a frequency-conditioned convolutional AE.
-
-- Main class: `src/laplace_surrogate/models/slae.py` -> `SLAE`
-- Conditioning: sinusoidal coordinate encoding + FiLM on the frequency ratio
-- Shape intuition: `U(t) -> L -> U_hat(s_k) -> Encoder -> z(s_k) -> Decoder -> L^{-1} -> U_rec(t)`
-- Strength: strong spatial compression with shared weights across frequencies
-- Limitation: must process all frequency frames during AE training and inference
-
-### Pipeline 5: LLAE
-
-Latent Laplace AE. The time-domain frames are first encoded into a latent sequence, then the Laplace transform is applied in latent space.
-
-- Main class: `src/laplace_surrogate/models/llae.py` -> `LLAE`
+- Class: `src/laplace_surrogate/models/llae.py` → `LLAE`
 - Conditioning: time ratio `t/T`
-- Shape intuition: `U(t) -> Encoder -> z(t) -> L -> z_hat(s_k) -> L^{-1} -> z_rec(t) -> Decoder -> U_rec(t)`
-- Strength: compresses the dynamics before the transform
-- Limitation: must pass all time frames through the AE, so it is heavier than SLAE
+- Data flow: `U(t) → Encoder → z(t) → L → ẑ(s_k) → L⁻¹ → z̃(t) → Decoder → Û_rec(t)`
+- Surrogate model: `LLAEModel` (`llae_surrogate.py`)
 
-### Pipeline 6: LSLAE
+### LSLAE — Latent SVD Laplace AE (variant of LLAE)
 
-Latent SVD Laplace AE. This is the LLAE family with an offline SVD projection on the latent sequence to reduce the surrogate dimension.
+LSLAE reuses a pre-trained LLAE encoder/decoder and adds an offline SVD projection on the latent sequence to compress the surrogate input dimension from `D` to `k_svd`.
 
-- Main class: `src/laplace_surrogate/models/lslae.py` -> `LSLAE`
-- Legacy alias: `LSLAEModel`
-- Shape intuition: `U(t) -> Encoder -> z(t) -> V -> G(t) -> L -> G_hat(s_k) -> L^{-1} -> G_rec(t) -> V^T -> z_rec(t) -> Decoder -> U_rec(t)`
-- Strength: simplifies surrogate learning by shrinking the latent dimension
-- Limitation: adds SVD truncation error and still processes all time frames
+- Class: `src/laplace_surrogate/models/lslae.py` → `LSLAE` (alias `LSLAEModel = LSLAE`)
+- Extends `BaseDecoder` (only the decoder is trained; encoder is frozen from LLAE)
+- Data flow: `U(t) → [frozen Enc] → z(t) → V → G(t) → L → Ĝ(s_k) → L⁻¹ → G̃(t) → Vᵀ → z̃(t) → [frozen Dec] → Û_rec(t)`
+- SVD basis `V` is computed offline from the LLAE latent sequences before training
+- Surrogate module: `LSLAESurrogateLightningModule` (`lslae_surrogate_module.py`)
 
-### Pipeline 7: Surrogate Training
+## Surrogate Training (Phase 2)
 
-The main end-to-end surrogate predicts the Laplace-domain latents from `θ`, then uses the frozen decoder and inverse transform to recover the full transient field.
+The surrogate predicts Laplace-domain latents from `θ`, then uses the frozen decoder and inverse transform to recover the full transient field.
 
-- Main class: `src/laplace_surrogate/models/slae_surrogate.py` -> `SLAEModel`
-- Related classes: `LLAEModel`, `LSLAEModel`
-- Training entry point: `scripts/train_surrogate.py`
-- Core idea: `θ -> latent(s_k) -> decoder -> inverse Laplace -> U_rec(t)`
-- Training signal: combined latent loss and physical-time reconstruction loss
+- Entry point: `scripts/train_surrogate.py`
+- Dispatcher: selects `SLAESurrogateLightningModule`, `LLAESurrogateLightningModule`, or `LSLAESurrogateLightningModule` from `cfg.model.name`
+- Reads `K` from the AE checkpoint via `ckpt_utils.peek_ae_hparams` before `dm.setup()`
+- `SurrogateLightningModule` requires `dm.setup()` before construction (dataset stats needed at init)
+- Core surrogate network: `FreqSurrogate` (`surrogate_base.py`) — trunk FFN shared across frequencies + per-frequency head
+- Training signal: combined latent loss + physical-time reconstruction L2 loss
 
-### Pipeline 8: Correction AE
+## Correction AE (Phase 3, optional)
 
-The final optional stage is a lightweight residual UNet that corrects Gibbs-like oscillations introduced by spectral truncation.
+A lightweight residual UNet that corrects Gibbs-like oscillations from spectral truncation.
 
-- Main class: `src/laplace_surrogate/models/corrector.py` -> `CorrectionAE`
-- Chained model: `CorrectedSLAEModel`
-- Training entry point: `scripts/train_corrector.py training=corrector`
-- Input: inverted temporal field `U_rec(t)`
-- Output: residual correction `δ_pred(t)`
+- Class: `src/laplace_surrogate/models/corrector.py` → `CorrectionAE`
+- Chained model: `CorrectedSLAEModel` (wraps `SLAEModel` + `CorrectionAE`)
+- Input: reconstructed temporal field `Û_rec(t)`; output: residual correction `δ̂(t)`
+- Lightning module: `CorrectorLightningModule`
 
 ## Main Workflow
 
-The production pipeline described in the article is SLAE + surrogate + optional corrector.
-
 ```bash
-# Step 1 - Train the Laplace AE
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py
+# Phase 1 — Train AE  (model= slae | llae | lslae)
+PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=slae training=ae
+PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=llae training=ae
+PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=lslae training=ae
 
-# Step 2 - Train the end-to-end surrogate θ→z→U(t)
-PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py
+# Phase 2 — Train surrogate  (must match the AE used in Phase 1)
+PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=lslae training=surrogate_lslae training.ae_ckpt=<ckpt>
 
-# Step 3 - Optional residual correction
+# Phase 3 — Optional corrector (SLAE pipeline only)
 PYTHONPATH=src .conda/bin/python scripts/train_corrector.py training=corrector
 
 # Evaluation
-PYTHONPATH=src .conda/bin/python scripts/evaluate.py eval.ckpt_path=checkpoints/LaplaceLatentModel_best.pt
+PYTHONPATH=src .conda/bin/python scripts/evaluate.py eval.ckpt_path=<ckpt>
 
-# Streamlit app
+# Streamlit demo
 PYTHONPATH=src .conda/bin/streamlit run app/streamlit_app.py
 ```
 
 ## Transforms
 
-- `src/laplace_surrogate/laplace_transform/learnable.py` -> `LearnableLaplace(K, dt, Nt)` with learnable poles `s_k`
-- `src/laplace_surrogate/laplace_transform/forward.py` -> `laplace_forward_tik(U, s_list, dt, rule)`
-- `src/laplace_surrogate/laplace_transform/inverse.py` -> `laplace_inverse_tik(U_hat, s_list, dt, Nt, alpha_t, lam, rule)`
-- `src/laplace_surrogate/transform/` remains as a compatibility shim for older imports
+Real module location is `src/laplace_surrogate/laplace_transform/`; `src/laplace_surrogate/transform/` is a compatibility shim.
+
+- `learnable.py` → `LearnableLaplace(K, dt, Nt)` with learnable poles `s_k`
+- `forward.py` → `laplace_forward_tik(U, s_list, dt, rule)`
+- `inverse.py` → `laplace_inverse_tik(U_hat, s_list, dt, Nt, alpha_t, lam, rule)`
 
 ## Inference
 
 ```python
 from laplace_surrogate.inference.pipeline import InferencePipeline
 
-pipe = InferencePipeline.from_checkpoint('checkpoints/LaplaceLatentModel_best.pt')
+pipe = InferencePipeline.from_checkpoint('checkpoints/SLAEModel__slae_ld64_K16_g0.0__t4h2.pt')
 U_pred = pipe.predict([[k, A, C]])  # (B, Nt, N, N) float32
 ```
 
-`InferencePipeline` detects the `model_type` from the checkpoint and handles `θ` normalization automatically. It supports `SLAEModel`, `LLAEModel`, `LSLAEModel`, `LaplaceSVDModel`, `LaplaceFFNModel`, `TuckerPODModel`, and `CorrectionAE`.
+`InferencePipeline.from_checkpoint` reads `model_type` from the checkpoint and handles `θ` normalization automatically. Supported backends: `SLAEModel`, `LLAEModel`, `LSLAEModel`, `CorrectionAE`.
 
-## Lightning / Hydra
+## Checkpoint Naming Convention
 
-- `src/laplace_surrogate/lightning/` contains `AELightningModule`, `SurrogateLightningModule`, and `CorrectorLightningModule`.
-- `configs/` contains `model/slae.yaml`, `training/{autoencoder,surrogate,corrector}.yaml`, `data/combustion.yaml`, and `eval/default.yaml`.
-- `SurrogateLightningModule` requires `dm.setup()` before construction because the dataset statistics are needed at init time.
-- `AELightningModule.on_train_epoch_start` calls `dm.train_dataset.reshuffle()` to reshuffle simulation/frequency pairs.
+AE checkpoints are saved as `{ae_tag}.pt` where `ae_tag` encodes key hyperparameters:
+- SLAE: `slae_ld{latent_dim}_K{K}_g{gamma_init}[_ll][_ol]`
+- LLAE: `llae_ld{latent_dim}_K{K}_g{gamma_init}[_ll]`
+- LSLAE: `lslae_ld{latent_dim}_K{K}_ksvd{k_svd}[_ll]`
+
+Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}.pt`
+
+## Lightning / Hydra Notes
+
+- `AELightningModule` handles all three AE types (SLAE, LLAE, LSLAE); instantiates the right model from `cfg.model.name`.
+- `AELightningModule.on_train_epoch_start` calls `dm.train_dataset.reshuffle()` to reshuffle simulation/frequency pairs each epoch.
+- `SurrogateLightningModule` requires `dm.setup()` before construction.
+- `ckpt_utils.peek_ae_hparams` reads `K` from an AE checkpoint without loading model weights.
 
 ## Useful Commands
 
@@ -184,7 +175,6 @@ U_pred = pipe.predict([[k, A, C]])  # (B, Nt, N, N) float32
 # Smoke tests
 PYTHONPATH=src .conda/bin/python -m pytest tests/ -q
 
-# Example ablation sweep
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py --multirun experiment=ablation_latent_dim model.latent_dim=16,32,64,128
+# Ablation sweep on latent_dim
+PYTHONPATH=src .conda/bin/python scripts/train_ae.py --multirun model=slae model.latent_dim=16,32,64,128
 ```
-
