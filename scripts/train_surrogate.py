@@ -46,9 +46,9 @@ def main(cfg: DictConfig):
 
     # Lit K depuis le checkpoint AE, avant dm.setup() qui en a besoin
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
-    from omegaconf import OmegaConf
+    from omegaconf import open_dict
     ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
-    with OmegaConf.open_dict(cfg):
+    with open_dict(cfg):
         cfg.model.K = ae_hparams['K']
 
     dm = TransientDataModule(cfg, mode='surrogate')
@@ -87,9 +87,12 @@ def main(cfg: DictConfig):
         callbacks=[ckpt_cb, early_stop],
         log_every_n_steps=20,
     )
-    trainer.fit(module, dm)
+    ckpt_path = cfg.training.get('ckpt_path', None)
+    trainer.fit(module, dm, ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":
     import torch
+    _orig_load = torch.load
+    torch.load = lambda *a, weights_only=False, **kw: _orig_load(*a, weights_only=False, **kw)
     main()
