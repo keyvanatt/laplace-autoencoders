@@ -253,11 +253,15 @@ class TransientDataModule(pl.LightningDataModule):
                   (self.mode == 'ae' and model_name != 'llae')
 
         # s_list pour la transformée de Laplace
+        # Contour de Bromwich tronqué : K premières fréquences FFT (ω_k = 2π·k/(Nt·dt))
         s_list = None
         if laplace:
-            K      = self.cfg.model.get('K', 16)
-            gamma  = self.cfg.model.get('gamma_init', 0.0)
-            s_im   = np.linspace(0.0, math.pi / cfg_d.dt, K)
+            K     = self.cfg.model.get('K', 16)
+            gamma = self.cfg.model.get('gamma_init', 0.0)
+            _tmp  = np.load(cfg_d.data_path, mmap_mode='r')
+            Nt    = _tmp.shape[1]
+            del _tmp
+            s_im   = 2 * np.pi * np.fft.rfftfreq(Nt, d=cfg_d.dt)[:K]
             s_list = (gamma + 1j * s_im).astype(np.complex128)
 
         self.dataset = TransientDataset(
