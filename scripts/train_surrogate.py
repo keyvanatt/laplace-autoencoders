@@ -90,6 +90,9 @@ def main(cfg: DictConfig):
     ckpt_path = cfg.training.get('ckpt_path', None)
     trainer.fit(module, dm, ckpt_path=ckpt_path)
 
+    actual_ckpt = Path(ckpt_cb.best_model_path).name
+    logger.experiment.summary["ckpt_filename"] = actual_ckpt
+
 
 if __name__ == "__main__":
     import torch
