@@ -1,5 +1,6 @@
 # Architecture partagée du surrogate MLP (trunk + heads FreqSurrogate).
 # Référencé par defaults dans surrogate_slae/llae/lslae.yaml.
+ckpt_path: null
 hidden_dim: 512
 head_dim:   256
 n_trunk:    4

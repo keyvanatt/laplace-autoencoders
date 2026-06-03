@@ -1,6 +1,7 @@
 import math
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -32,10 +33,14 @@ class LearnableLaplace(nn.Module):
         self.Nt        = Nt
         self.learnable = learnable
 
+        # Contour de Bromwich tronqué : K premières fréquences FFT (ω_k = 2π·k/(Nt·dt))
+        s_im_init = torch.tensor(
+            2 * math.pi * np.fft.rfftfreq(Nt, d=dt)[:K], dtype=torch.float32
+        )
+
         self.s_re        = nn.Parameter(torch.full((K,), gamma_init),
                                         requires_grad=learnable)
-        self.s_im        = nn.Parameter(torch.linspace(0.0, math.pi / dt, K),
-                                        requires_grad=learnable)
+        self.s_im        = nn.Parameter(s_im_init.clone(), requires_grad=learnable)
         self.log_alpha_t = nn.Parameter(torch.tensor(math.log(alpha_t)), requires_grad=learnable)
         self.log_lam     = nn.Parameter(torch.tensor(math.log(lam)),     requires_grad=learnable)
 
@@ -46,7 +51,7 @@ class LearnableLaplace(nn.Module):
         self.register_buffer('_DtTDt', Dt.T @ Dt)   # (Nt, Nt) float32
 
         self.register_buffer('_s_init_re', torch.full((K,), gamma_init))
-        self.register_buffer('_s_init_im', torch.linspace(0.0, math.pi / dt, K))
+        self.register_buffer('_s_init_im', s_im_init)
 
         self._eval_cache: Optional[tuple] = None
         self._F_fwd_cache: Optional[torch.Tensor] = None
