@@ -21,9 +21,10 @@ def _ae_tag(cfg_m) -> str:
     ld   = cfg_m.latent_dim
     g    = cfg_m.gamma_init
     ll   = '_ll' if cfg_m.get('learnable_laplace', False) else ''
+    ol   = '_ol' if cfg_m.get('optimal_laplace',   False) else ''
     if name == 'slae':
         K = cfg_m.get('K', 'all')
-        return f"{name}_ld{ld}_K{K}_g{g}{ll}"
+        return f"{name}_ld{ld}_K{K}_g{g}{ll}{ol}"
     elif name == 'llae':
         return f"{name}_ld{ld}_K{cfg_m.K}_g{g}{ll}"
     elif name == 'lslae':

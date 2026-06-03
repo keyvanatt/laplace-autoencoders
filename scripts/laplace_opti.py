@@ -489,3 +489,21 @@ if __name__ == '__main__':
         case_chunk=case_chunk, sp_chunk=sp_chunk, seed=seed,
         data_path=data_path, log_wandb=True,
     )
+
+    os.makedirs("checkpoints", exist_ok=True)
+    ckpt_path = os.path.join("checkpoints", f"laplace_opti_K{K}.pt")
+    torch.save(
+        {
+            "s_opt":       s_opt,
+            "lam":         lam_opt,
+            "alpha_t":     alpha_t_opt,
+            "K":           K,
+            "Nt":          Nt,
+            "dt":          dt,
+            "n_epochs":    n_epochs,
+            "n_cases":     n_cases,
+            "seed":        seed,
+        },
+        ckpt_path,
+    )
+    print(f"Saved optimized parameters → {ckpt_path}")

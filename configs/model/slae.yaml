@@ -9,3 +9,7 @@ freq_L: 8
 # Fréquences de Laplace (contour de Bromwich)
 K: 16           # nombre de fréquences de Laplace
 gamma_init: 0.0 # amortissement γ du contour
+
+# Pôles optimisés (laplace_opti.py)
+optimal_laplace: false
+optimal_laplace_path: null  # ex. checkpoints/laplace_opti_K16.pt
