@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 seed: 42
-project: convdiff
+project: laplace-autoencoders
 save_dir: /Data/KAT/checkpoints
 
 hydra:
