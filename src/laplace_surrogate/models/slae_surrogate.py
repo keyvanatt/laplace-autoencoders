@@ -63,8 +63,11 @@ class SLAEModel(BaseDecoder):
         self.freq_L      = freq_L
         self.surr_freq_L = surr_freq_L
 
-        self.register_buffer('U_mean', torch.zeros(N, N))
-        self.register_buffer('U_std',  torch.ones(N, N))
+        self.register_buffer('U_mean',   torch.zeros(N, N))
+        self.register_buffer('U_std',    torch.ones(N, N))
+        # Normalisation Laplace par fréquence, pixel par pixel (K, 2, N, N)
+        self.register_buffer('lap_mean', torch.zeros(K, 2, N, N))
+        self.register_buffer('lap_std',  torch.ones(K, 2, N, N))
 
         self.laplace = LearnableLaplace(
             K=K, dt=dt, Nt=Nt,
@@ -103,8 +106,12 @@ class SLAEModel(BaseDecoder):
             device=theta_norm.device, dtype=torch.float32,
         ).repeat_interleave(B)
 
-        preds = self.shared_decoder(z_flat.float(), fr)           # (K*B, 2, N, N)
+        preds = self.shared_decoder(z_flat.float(), fr)           # (K*B, 2, N, N) — espace Laplace normalisé
         preds = preds.view(self.K, B, 2, self.N, self.N)
+
+        # Dénormalise dans le domaine Laplace → frames physiques
+        preds = preds * self.lap_std.unsqueeze(1) + self.lap_mean.unsqueeze(1)  # (K, B, 2, N, N)
+
         M = torch.complex(
             preds[:, :, 0].reshape(self.K, B, NN).permute(1, 2, 0).float(),
             preds[:, :, 1].reshape(self.K, B, NN).permute(1, 2, 0).float(),
@@ -112,24 +119,33 @@ class SLAEModel(BaseDecoder):
         return M, z_pred
 
     def _forward_train(self, theta_norm: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward d'entraînement : retourne (U_norm, z_pred) sans dénormalisation.
-        U_norm : (B, Nt, N, N)  — champ normalisé
-        z_pred : (B, K, latent_dim) — codes latents prédits (pour la loss latente)
+        """Forward d'entraînement : retourne (U_norm, z_pred) normalisé réel.
+        M (physique) → L⁻¹ → U physique → normalise réel → U_norm.
         """
         M, z_pred = self._forward_k(theta_norm)
-        U_norm = self.laplace.inverse_transform(M.permute(0, 2, 1), self.Nt)
-        return U_norm.reshape(theta_norm.shape[0], self.Nt, self.N, self.N), z_pred
+        U_phys    = self.laplace.inverse_transform(M.permute(0, 2, 1), self.Nt)
+        U_phys    = U_phys.reshape(theta_norm.shape[0], self.Nt, self.N, self.N)
+        U_norm    = (U_phys - self.U_mean) / self.U_std
+        return U_norm, z_pred
 
     @torch.no_grad()
     def _encode_targets(self, u_norm: torch.Tensor) -> torch.Tensor:
-        """u_norm : (B, Nt, N, N) → z_true : (B, K, latent_dim)"""
+        """u_norm : (B, Nt, N, N) normalisé réel → z_true : (B, K, latent_dim)
+        Récupère U physique, applique Laplace, normalise dans le domaine Laplace.
+        """
         B, Nt, N, _ = u_norm.shape
-        u_flat = u_norm.reshape(B, Nt, N * N).float()
-        u_hat  = self.laplace.forward_transform(u_flat)  # (B, K, N²) complex
+        u_phys = u_norm * self.U_std + self.U_mean                        # (B, Nt, N, N)
+        u_flat = u_phys.reshape(B, Nt, N * N).float()
+        u_hat  = self.laplace.forward_transform(u_flat)                   # (B, K, N²) complex
 
         re     = u_hat.real.reshape(B, self.K, N, N)
         im     = u_hat.imag.reshape(B, self.K, N, N)
         frames = torch.stack([re, im], dim=2).reshape(B * self.K, 2, N, N)
+
+        # Normalise dans le domaine Laplace — même espace que l'encodeur AE
+        lap_mean = self.lap_mean.unsqueeze(0).expand(B, -1, -1, -1, -1).reshape(B * self.K, 2, N, N)
+        lap_std  = self.lap_std.unsqueeze(0).expand(B, -1, -1, -1, -1).reshape(B * self.K, 2, N, N)
+        frames   = (frames - lap_mean) / lap_std
 
         fr = torch.tensor(
             [k / max(self.K - 1, 1) for k in range(self.K)],
@@ -143,7 +159,7 @@ class SLAEModel(BaseDecoder):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         theta_norm : (B, theta_dim)
-        U_norm     : (B, Nt, N, N)
+        U_norm     : (B, Nt, N, N) normalisé réel
         retourne   : (u_pred_norm, z_pred, z_true)
         """
         u_pred_norm, z_pred = self._forward_train(theta_norm)
@@ -165,11 +181,11 @@ class SLAEModel(BaseDecoder):
         return total, {'spat': spat_loss.detach(), 'lat': lat_loss.detach()}
 
     def _generate(self, theta_norm: torch.Tensor, **kwargs) -> torch.Tensor:
-        device = theta_norm.device
-        M, _   = self._forward_k(theta_norm)
-        U_norm = self.laplace.inverse_transform(M.permute(0, 2, 1), self.Nt)
-        U_norm = U_norm.reshape(theta_norm.shape[0], self.Nt, self.N, self.N)
-        return U_norm * self.U_std.to(device) + self.U_mean.to(device)
+        # M est déjà en espace Laplace physique (dénormalisé dans _forward_k)
+        # → inverse Laplace donne directement U physique
+        M, _ = self._forward_k(theta_norm)
+        U    = self.laplace.inverse_transform(M.permute(0, 2, 1), self.Nt)
+        return U.reshape(theta_norm.shape[0], self.Nt, self.N, self.N)
 
     def _generate_diff(self, theta_norm: torch.Tensor, **kwargs) -> torch.Tensor:
         return self._generate(theta_norm)
