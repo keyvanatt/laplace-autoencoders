@@ -19,8 +19,7 @@ src/laplace_surrogate/
   models/             slae.py, llae.py, lslae.py
                       slae_surrogate.py, llae_surrogate.py
                       corrector.py, encoder_decoder.py, surrogate_base.py, base.py
-  laplace_transform/  forward.py, inverse.py, learnable.py  ← real location
-  transform/          forward.py, inverse.py, learnable.py  ← compatibility shim only
+  laplace_transform/  forward.py, inverse.py, learnable.py
   lightning/          ae_module.py, slae_surrogate_module.py,
                       llae_surrogate_module.py, lslae_surrogate_module.py,
                       corrector_module.py, ckpt_utils.py
@@ -136,7 +135,7 @@ PYTHONPATH=src .conda/bin/streamlit run app/streamlit_app.py
 
 ## Transforms
 
-Real module location is `src/laplace_surrogate/laplace_transform/`; `src/laplace_surrogate/transform/` is a compatibility shim.
+Module location: `src/laplace_surrogate/laplace_transform/`.
 
 - `learnable.py` → `LearnableLaplace(K, dt, Nt)` with learnable poles `s_k`
 - `forward.py` → `laplace_forward_tik(U, s_list, dt, rule)`

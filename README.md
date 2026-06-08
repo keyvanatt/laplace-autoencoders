@@ -8,7 +8,7 @@
 src/laplace_surrogate/         — code transitoire (package principal)
   data/                        — dataset.py, datamodule.py
   models/                      — SLAE, LLAE, LaplaceLatentModel, CorrectionAE, …
-  transform/                   — LearnableLaplace, laplace_forward_tik/laplace_inverse_tik
+  laplace_transform/           — LearnableLaplace, laplace_forward_tik/laplace_inverse_tik
   lightning/                   — AE/Surrogate/CorrectorLightningModule
   inference/                   — InferencePipeline.from_checkpoint
   utils/                       — visualization, rotate, make_split
