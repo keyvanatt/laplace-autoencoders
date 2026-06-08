@@ -4,9 +4,10 @@ from laplace_surrogate.models.encoder_decoder import (
 )
 from laplace_surrogate.models.slae import SLAE, LaplaceEncoder, LaplaceDecoder
 from laplace_surrogate.models.llae import LLAE
-from laplace_surrogate.models.lslae import LSLAE, LSLAEModel
 from laplace_surrogate.models.slae_surrogate import SLAEModel
 from laplace_surrogate.models.llae_surrogate import LLAEModel
+from laplace_surrogate.models.slae_svd_surrogate import SLAESVDModel
+from laplace_surrogate.models.llae_svd_surrogate import LLAESVDModel
 from laplace_surrogate.models.corrector import CorrectionAE, CorrectedSLAEModel
 
 __all__ = [
@@ -14,8 +15,9 @@ __all__ = [
     "SinusoidalFreqEncoding", "ConvEncoder", "ConvDecoder",
     "SLAE", "LaplaceEncoder", "LaplaceDecoder",
     "LLAE",
-    "LSLAE", "LSLAEModel",
     "SLAEModel",
     "LLAEModel",
+    "SLAESVDModel",
+    "LLAESVDModel",
     "CorrectionAE", "CorrectedSLAEModel",
 ]

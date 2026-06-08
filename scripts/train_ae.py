@@ -1,5 +1,5 @@
 """
-train_ae.py — Phase 1 : entraînement de l'autoencoder (SLAE, LLAE ou LSLAE).
+train_ae.py — Phase 1 : entraînement de l'autoencoder (SLAE ou LLAE).
 
 Usage :
     PYTHONPATH=src python scripts/train_ae.py                    # SLAE par défaut
@@ -27,8 +27,6 @@ def _ae_tag(cfg_m) -> str:
         return f"{name}_ld{ld}_K{K}_g{g}{ll}{ol}"
     elif name == 'llae':
         return f"{name}_ld{ld}_K{cfg_m.K}_g{g}{ll}"
-    elif name == 'lslae':
-        return f"{name}_ld{ld}_K{cfg_m.K}_ksvd{cfg_m.k_svd}{ll}"
     else:
         return name
 

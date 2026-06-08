@@ -1,41 +1,41 @@
 """
-lslae.py — Latent SVD Laplace AE (LSLAE).
+llae_svd_surrogate.py — SVD Surrogate LLAE : θ → Ĝ_SVD → z(t) → U(t).
 
-Alias LSLAEModel = LSLAE.
+Variante surrogate du pipeline LLAE avec compression SVD des latents temporels.
+Ce n'est pas un AE indépendant : il réutilise l'encodeur et le décodeur d'un LLAE
+pré-entraîné, et ajoute une base SVD apprise V [D, k_svd].
 
-Pipeline :
-  Phase 1 — LLAE pré-entraîné (inchangé).
-  Phase 2 — offline :
-      z(t) = encoder(U(t))  →  SVD tronquée  →  V [D, k_svd]
-      G(t) = z(t) @ V  →  [n, Nt, k_svd]
-      Ĝ(k) = laplace.forward_transform(G)  →  [n, K, k_svd] complex
-  Phase 3 — entraîne LSLAE :
-      θ → FreqSurrogate → Ĝ_norm [B, K, k_svd, 2]
-      → dénorm → Ĝ_phys [B, K, k_svd] complex
-      → laplace.inverse_transform → G̃(t) [B, Nt, k_svd]
-      → @ V.T → z̃(t) [B, Nt, D] → ConvDecoder(t_ratio) → Û_norm(t) [B, Nt, N, N]
+Pipeline (phase 2 offline) :
+  z(t) = encoder_LLAE(U(t))          [ns, Nt, D]
+  SVD tronquée sur z_train → V       [D, k_svd]
+  G(t) = z(t) @ V                    [ns, Nt, k_svd]
+  Ĝ(s_k) = Laplace(G(t))            [ns, K, k_svd] complexe
+  stats(Ĝ) → G_hat_mean, G_hat_std   [K, k_svd, 2]
+
+Pipeline (entraînement) :
+  θ → FreqSurrogate → Ĝ_norm [B, K, k_svd, 2]
+  → dénorm → Ĝ [B, K, k_svd] complexe
+  → Laplace⁻¹ → G̃(t) [B, Nt, k_svd]
+  → @ V.T → z̃(t) [B, Nt, D]
+  → ConvDecoder → Û(t) [B, Nt, N, N]
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from laplace_surrogate.models.base import BaseDecoder
 from laplace_surrogate.models.encoder_decoder import ConvDecoder
 from laplace_surrogate.laplace_transform.learnable import LearnableLaplace
 from laplace_surrogate.models.surrogate_base import FreqSurrogate
 
 
-class LSLAE(BaseDecoder):
+class LLAESVDModel(nn.Module):
     """
-    Surrogate end-to-end LSLAE.
+    Surrogate LLAE avec compression SVD des latents temporels.
 
     Paramètres appris :
       V          [latent_dim, k_svd]   base SVD (initialisée offline, fine-tunée)
       surrogate  FreqSurrogate  θ → Ĝ_norm [B, K, k_svd*2]
       decoder    ConvDecoder (poids copiés depuis LLAE, fine-tunés)
-
-    Paramètres issus de l'AE (chargés via load_ae_decoder / load_laplace_from_ae) :
-      latent_dim, K, dt, time_L — doivent correspondre au LLAE source
     """
 
     def __init__(
@@ -82,14 +82,13 @@ class LSLAE(BaseDecoder):
             hidden_dim=hidden_dim, head_dim=head_dim,
             n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
-
         self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
 
-    def set_svd_basis(self, V):
-        if not isinstance(V, torch.Tensor):
-            V = torch.tensor(V, dtype=torch.float32)
+    # ------------------------------------------------------------------
+
+    def set_svd_basis(self, V: torch.Tensor):
         with torch.no_grad():
-            self.V.copy_(V.float())
+            self.V.copy_(V.float() if isinstance(V, torch.Tensor) else torch.tensor(V, dtype=torch.float32))
 
     def set_normalization(self, G_hat_mean, G_hat_std, U_mean, U_std, theta_mean, theta_std):
         def _t(x):
@@ -106,7 +105,7 @@ class LSLAE(BaseDecoder):
         self.decoder.load_state_dict(ae.decoder.state_dict())
 
     def load_laplace_from_ae(self, ae):
-        """Copie les paramètres Laplace depuis un LLAE et gèle la transformée."""
+        """Copie les paramètres Laplace depuis un LLAE (pôles, alpha_t, lam)."""
         self.laplace.s_re.data.copy_(ae.laplace.s_re.data)
         self.laplace.s_im.data.copy_(ae.laplace.s_im.data)
         self.laplace.log_alpha_t.data.copy_(ae.laplace.log_alpha_t.data)
@@ -114,18 +113,21 @@ class LSLAE(BaseDecoder):
         self.laplace._eval_cache  = None
         self.laplace._F_fwd_cache = None
 
+    # ------------------------------------------------------------------
+
     def _t_ratios(self, Nt, B, dtype, device):
         t = torch.arange(Nt, dtype=dtype, device=device) / max(Nt - 1, 1)
         return t.unsqueeze(0).expand(B, -1).reshape(B * Nt, 1)
 
-    def _decode_seq(self, z):
+    def _decode_seq(self, z: torch.Tensor) -> torch.Tensor:
         """z: (B, Nt, latent_dim) → U_norm: (B, Nt, N, N)"""
         B, Nt, D = z.shape
         flat     = z.reshape(B * Nt, D)
         t_ratios = self._t_ratios(Nt, B, z.dtype, z.device)
         return self.decoder(flat, t_ratios).view(B, Nt, self.N, self.N)
 
-    def _forward_full(self, theta_norm):
+    def _predict_and_reconstruct(self, theta_norm: torch.Tensor):
+        """θ_norm → (U_pred_norm, G_hat_norm)"""
         B          = theta_norm.shape[0]
         G_hat_norm = self.surrogate(theta_norm).view(B, self.K, self.k_svd, 2)
         G_hat_ri   = G_hat_norm * self.G_hat_std + self.G_hat_mean
@@ -135,12 +137,15 @@ class LSLAE(BaseDecoder):
         U_pred     = self._decode_seq(z_tilde)
         return U_pred, G_hat_norm
 
-    def forward(self, theta_norm, z_true):
+    # ------------------------------------------------------------------
+
+    def forward(self, theta_norm: torch.Tensor, z_true: torch.Tensor):
         """
-        theta_norm : (B, D_θ)
-        z_true     : (B, Nt, latent_dim)  latents encodés (frozen encoder, offline)
+        theta_norm : (B, theta_dim)
+        z_true     : (B, Nt, latent_dim)  latents LLAE encodés (encoder gelé)
+        retourne   : (U_pred_norm, G_hat_norm, G_hat_true_norm)
         """
-        U_pred, G_hat_norm = self._forward_full(theta_norm)
+        U_pred, G_hat_norm = self._predict_and_reconstruct(theta_norm)
 
         with torch.no_grad():
             G_true          = z_true.float() @ self.V.detach()
@@ -156,10 +161,8 @@ class LSLAE(BaseDecoder):
         total = spat + alpha_lat * lat
         return total, {'spat': spat.detach(), 'lat': lat.detach()}
 
-    def _generate(self, theta_norm, **kwargs):
-        """theta_norm : (B, D_θ) → Û : (B, Nt, N, N) valeurs physiques."""
-        U_pred, _ = self._forward_full(theta_norm)
+    @torch.no_grad()
+    def generate(self, theta_norm: torch.Tensor) -> torch.Tensor:
+        """θ_norm → U physique (B, Nt, N, N)."""
+        U_pred, _ = self._predict_and_reconstruct(theta_norm)
         return U_pred * self.U_std[None, None] + self.U_mean[None, None]
-
-
-LSLAEModel = LSLAE

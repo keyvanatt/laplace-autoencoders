@@ -1,0 +1,17 @@
+# Hyperparamètres pour le surrogate SVD-LLAE (train_surrogate.py model=llae training=surrogate_llae_svd)
+# SVD tronquée sur les latents temporels z(t) avant la transformée de Laplace.
+defaults:
+  - surrogate_arch
+
+epochs: 300
+batch_size: 16
+lr_surrogate: 5.0e-4
+lr_decoder:   5.0e-5
+lr_V:         5.0e-4
+patience: 40
+
+# Nombre de modes SVD retenus pour la compression des latents
+k_svd: 16
+
+# Checkpoint AE LLAE à charger
+ae_ckpt: checkpoints/llae_best.pt
