@@ -26,9 +26,10 @@ def laplace_forward_tik(C, s_list, dt, rule='trap'):
     device = s_list.device
     C = C.to(device=device)
     Nnodes, Nt = C.shape
-    t = torch.arange(Nt, dtype=torch.float64, device=device) * dt
+    rdtype = torch.float32 if s_list.dtype == torch.complex64 else torch.float64
+    t = torch.arange(Nt, dtype=rdtype, device=device) * dt
 
-    w = torch.ones(Nt, dtype=torch.float64, device=device)
+    w = torch.ones(Nt, dtype=rdtype, device=device)
     if rule == 'trap':
         w[0] = 0.5
         w[-1] = 0.5
