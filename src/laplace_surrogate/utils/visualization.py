@@ -147,3 +147,42 @@ def animate_comparaison(
     ani.save(output_path, writer="pillow", fps=fps)
     plt.close(fig)
     print(f"Saved: {output_path}")
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+
+    import random
+    import numpy as np
+    from laplace_surrogate.inference.pipeline_ae import InferencePipelineAE
+
+    # ─────────────────────────────────────────────────────────────────────────
+    CKPT_PATH = 'checkpoints/slae_ld64_K16_g0.01.ckpt'
+    OUT_DIR   = 'plots'
+    N_SAMPLES = 3
+    FPS       = 10
+    SEED      = 0
+    # ─────────────────────────────────────────────────────────────────────────
+
+    random.seed(SEED)
+    np.random.seed(SEED)
+
+    pipe   = InferencePipelineAE.from_checkpoint(CKPT_PATH)
+    chosen = random.sample(pipe.test_idx, N_SAMPLES)
+
+    for rank, sim_i in enumerate(chosen):
+        print(f"\n[{rank+1}/{N_SAMPLES}] simulation {sim_i}")
+        u_raw = pipe.dataset._load_u(sim_i)        # (Nt, N, N)
+        U_rec = pipe.reconstruct(u_raw)[0]         # (Nt, N, N)
+
+        out = os.path.join(OUT_DIR, f'sim{sim_i:04d}_comparaison.gif')
+        animate_comparaison(
+            u_raw, U_rec,
+            output_path=out,
+            fps=FPS,
+            label='CH4',
+            title_a='Référence',
+            title_b=f'Reconstruction {pipe.model_name.upper()}',
+            title_fn=lambda t, s=sim_i: f'sim {s} — t = {t}',
+        )
