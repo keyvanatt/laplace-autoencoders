@@ -7,7 +7,9 @@ car l'initialisation du SLAEModel/LLAEModel dépend des stats du dataset.
 Usage :
     PYTHONPATH=src python scripts/train_surrogate.py model=slae training=surrogate_slae
     PYTHONPATH=src python scripts/train_surrogate.py model=llae training=surrogate_llae
-    PYTHONPATH=src python scripts/train_surrogate.py model=slae training=surrogate_slae training.ae_ckpt=checkpoints/slae_ld64_K16_g0.0.pt
+    # Variantes SVD (compression des latents par SVD avant le surrogate) :
+    PYTHONPATH=src python scripts/train_surrogate.py model=slae training=surrogate_slae_svd
+    PYTHONPATH=src python scripts/train_surrogate.py model=llae training=surrogate_llae_svd
 """
 import sys
 import os
@@ -18,9 +20,13 @@ from omegaconf import DictConfig
 
 
 _SURROGATE_MODULES = {
-    'slae':  ('laplace_surrogate.lightning.slae_surrogate_module',  'SLAESurrogateLightningModule',  'SLAEModel'),
-    'llae':  ('laplace_surrogate.lightning.llae_surrogate_module',  'LLAESurrogateLightningModule',  'LLAEModel'),
-    'lslae': ('laplace_surrogate.lightning.lslae_surrogate_module', 'LSLAESurrogateLightningModule', 'LSLAEModel'),
+    'slae':  ('laplace_surrogate.lightning.slae_surrogate_module',     'SLAESurrogateLightningModule',    'SLAEModel'),
+    'llae':  ('laplace_surrogate.lightning.llae_surrogate_module',     'LLAESurrogateLightningModule',    'LLAEModel'),
+}
+
+_SVD_SURROGATE_MODULES = {
+    'slae':  ('laplace_surrogate.lightning.slae_svd_surrogate_module', 'SLAESVDSurrogateLightningModule', 'SLAESVDModel'),
+    'llae':  ('laplace_surrogate.lightning.llae_svd_surrogate_module', 'LLAESVDSurrogateLightningModule', 'LLAESVDModel'),
 }
 
 
@@ -39,17 +45,24 @@ def main(cfg: DictConfig):
     torch.backends.cudnn.benchmark = True
 
     model_name = cfg.model.name
-    if model_name not in _SURROGATE_MODULES:
-        raise ValueError(f"Pas de surrogate pour model.name='{model_name}'. Choix : {list(_SURROGATE_MODULES)}")
-    mod_path, cls_name, model_cls = _SURROGATE_MODULES[model_name]
+    use_svd    = bool(cfg.training.get('k_svd', None) is not None
+                      and cfg.training.get('lr_V', None) is not None)
+    module_map = _SVD_SURROGATE_MODULES if use_svd else _SURROGATE_MODULES
+    if model_name not in module_map:
+        raise ValueError(
+            f"Pas de surrogate{'_svd' if use_svd else ''} pour model.name='{model_name}'. "
+            f"Choix : {list(module_map)}"
+        )
+    mod_path, cls_name, model_cls = module_map[model_name]
     LightningModule = getattr(importlib.import_module(mod_path), cls_name)
 
-    # Lit K depuis le checkpoint AE, avant dm.setup() qui en a besoin
+    # Lit K et gamma_init depuis le checkpoint AE, avant dm.setup() qui en a besoin
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
     from omegaconf import open_dict
     ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
     with open_dict(cfg):
-        cfg.model.K = ae_hparams['K']
+        cfg.model.K          = ae_hparams['K']
+        cfg.model.gamma_init = ae_hparams['gamma_init']
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()

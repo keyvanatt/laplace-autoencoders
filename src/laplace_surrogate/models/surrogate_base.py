@@ -3,7 +3,7 @@ surrogate_base.py — Bloc MLP θ → latents fréquentiels, commun à tous les 
 
 FreqSurrogate : trunk MLP partagé + K heads conditionnés par l'encoding sinusoïdal
                 de la fréquence de Laplace k/(K-1) ∈ [0, 1].
-                Utilisé par SLAEModel, LLAEModel et LSLAE.
+                Utilisé par SLAEModel, LLAEModel, SLAESVDModel et LLAESVDModel.
 """
 import torch
 import torch.nn as nn

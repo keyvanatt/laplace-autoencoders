@@ -9,9 +9,10 @@ Usage
     U_pred = pipe.predict([[k, A, C]])   # (B, Nt, N, N) float32
 
 Supporte les backends (détection automatique depuis model_type) :
-  - SLAEModel    (pipeline SLAE — AE spatial + surrogate, principal)
+  - SLAEModel    (pipeline SLAE — AE spatial + surrogate)
   - LLAEModel    (pipeline LLAE — AE latent + surrogate)
-  - LSLAEModel   (pipeline LSLAE — LLAE + SVD latent)
+  - SLAESVDModel (SLAE + compression SVD des latents Laplace)
+  - LLAESVDModel (LLAE + compression SVD des latents temporels)
   - CorrectionAE (post-traitement UNet, enchaîné avec SLAEModel)
 """
 from __future__ import annotations
@@ -142,7 +143,7 @@ class InferencePipeline:
             U_pred = U_pred * U_std + U_mean
             return U_pred.cpu().numpy()
 
-        else:  # LSLAEModel, …
+        else:  # SLAESVDModel, LLAESVDModel — generate() retourne déjà U physique
             U_pred = self.model.generate(theta_norm)
             return U_pred.cpu().numpy()
 
@@ -183,10 +184,10 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             n_trunk=ckpt['n_trunk'], n_head=ckpt['n_head'], freq_L=ckpt['freq_L'],
         ).to(device)
 
-    elif model_type == 'LSLAEModel':
-        from laplace_surrogate.models.lslae import LSLAE
+    elif model_type == 'LLAESVDModel':
+        from laplace_surrogate.models.llae_svd_surrogate import LLAESVDModel
         hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
-        return LSLAE(
+        return LLAESVDModel(
             N          = ckpt['N'],
             Nt         = ckpt['Nt'],
             theta_dim  = ckpt['theta_dim'],
@@ -200,6 +201,27 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             n_trunk    = ckpt['n_trunk'],
             n_head     = ckpt['n_head'],
             freq_L     = ckpt['freq_L'],
+        ).to(device)
+
+    elif model_type == 'SLAESVDModel':
+        from laplace_surrogate.models.slae_svd_surrogate import SLAESVDModel
+        hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
+        return SLAESVDModel(
+            K           = ckpt['K'],
+            Nt          = ckpt['Nt'],
+            N           = ckpt['N'],
+            theta_dim   = ckpt['theta_dim'],
+            latent_dim  = ckpt['latent_dim'],
+            k_svd       = ckpt['k_svd'],
+            freq_L      = ckpt['freq_L'],
+            hidden_dim  = hidden_dim,
+            head_dim    = ckpt['head_dim'],
+            n_trunk     = ckpt['n_trunk'],
+            n_head      = ckpt['n_head'],
+            surr_freq_L = ckpt.get('surr_freq_L', 6),
+            dt          = ckpt.get('dt', 1.0),
+            alpha_t     = ckpt.get('alpha_t', 0.007),
+            lam         = ckpt.get('lam', 3e-5),
         ).to(device)
 
     elif model_type == 'CorrectionAE':

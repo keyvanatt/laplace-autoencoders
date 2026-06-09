@@ -4,7 +4,7 @@ encoder_decoder.py — Backbone Conv partagé (FiLM + sinusoidal encoding).
 ConvEncoder  : (B, in_ch, N, N) → (B, latent_dim)
 ConvDecoder  : (B, latent_dim)  → (B, out_ch, N, N)
 
-Utilisé par LLAE et LSLAE (in_channels=1 pour frames temporelles,
+Utilisé par LLAE et les surrogates SVD (in_channels=1 pour frames temporelles,
 in_channels=2 pour frames fréquentielles Re/Im).
 """
 import math
