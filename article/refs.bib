@@ -1,3 +1,25 @@
+@article{wang2016autoencoder,
+  title={Auto-encoder based dimensionality reduction},
+  author={Wang, Yasi and Yao, Hongxun and Zhao, Sicheng},
+  journal={Neurocomputing},
+  volume={184},
+  pages={232--242},
+  year={2016},
+  publisher={Elsevier},
+  doi={10.1016/j.neucom.2015.08.104}
+}
+
+@article{baldi1989,
+  title={Neural networks and principal component analysis: Learning from examples without local minima},
+  author={Baldi, Pierre and Hornik, Kurt},
+  journal={Neural Networks},
+  volume={2},
+  number={1},
+  pages={53--58},
+  year={1989},
+  publisher={Elsevier}
+}
+
 @article{abate1992fourier,
   author  = {Abate, J. and Whitt, W.},
   title   = {The {Fourier}-series method for inverting transforms of probability distributions},
@@ -60,6 +82,17 @@
   booktitle = {International Conference on Learning Representations (ICLR)},
   year      = {2014},
   note      = {arXiv:1312.6114},
+}
+
+@article{delathauwer2000hooi,
+  author  = {De Lathauwer, L. and De Moor, B. and Vandewalle, J.},
+  title   = {On the Best Rank-1 and Rank-$(R_1,R_2,\ldots,R_N)$ Approximation of Higher-Order Tensors},
+  journal = {SIAM Journal on Matrix Analysis and Applications},
+  volume  = {21},
+  number  = {4},
+  pages   = {1324--1342},
+  year    = {2000},
+  doi     = {10.1137/S0895479898346995},
 }
 
 @article{kolda2009tensor,
@@ -142,15 +175,6 @@
   doi       = {10.1007/978-3-319-24574-4_28},
 }
 
-@article{raissi2019physics,
-  author  = {Raissi, M. and Perdikaris, P. and Karniadakis, G.~E.},
-  title   = {Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations},
-  journal = {Journal of Computational Physics},
-  volume  = {378},
-  pages   = {686--707},
-  year    = {2019},
-  doi     = {10.1016/j.jcp.2018.10.045},
-}
 
 @inproceedings{holt2022neural,
   title={Neural Laplace: Learning diverse classes of differential equations in the Laplace domain},
@@ -181,21 +205,93 @@
 
 @article{giacomini2026, title={Surrogates for Physics-based and Data-driven Modelling of Parametric Systems}, author={Giacomini, Matteo and D{\'\i}ez, Pedro}, year={2026} }
 @article{mallick2025, title={AI-Based Model Order Reduction Techniques: A Survey}, author={Mallick, Swaroop and Mittal, Monika}, year={2025} }
-@article{glas2017, title={Two Ways to Treat Time in Reduced Basis Methods}, author={Glas, Silke and Mayerhofer, Antonia and Urban, Karsten}, year={2017} }
-@article{lassila2014, title={Model Order Reduction in Fluid Dynamics: Challenges and Perspectives}, author={Lassila, Toni and Manzoni, Andrea and Quarteroni, Alfio and Rozza, Gianluigi}, year={2014} }
+@incollection{glas2017,
+  title={Two Ways to Treat Time in Reduced Basis Methods},
+  author={Glas, Silke and Mayerhofer, Antonia and Urban, Karsten},
+  booktitle={Model Reduction of Parametrized Systems},
+  editor={Benner, Peter and Ohlberger, Mario and Patera, Anthony and Rozza, Gianluigi and Urban, Karsten},
+  series={MS\&A},
+  volume={17},
+  pages={113--128},
+  year={2017},
+  publisher={Springer},
+  doi={10.1007/978-3-319-58786-8_5}
+}
+@incollection{lassila2014,
+  title={Model Order Reduction in Fluid Dynamics: Challenges and Perspectives},
+  author={Lassila, Toni and Manzoni, Andrea and Quarteroni, Alfio and Rozza, Gianluigi},
+  booktitle={Reduced Order Methods for Modeling and Computational Reduction},
+  editor={Quarteroni, Alfio and Rozza, Gianluigi},
+  series={MS\&A},
+  volume={9},
+  pages={235--274},
+  year={2014},
+  publisher={Springer},
+  doi={10.1007/978-3-319-02090-7_9}
+}
 @article{iliescu2025, title={Stabilization of CDR ROMs}, author={Parish, Eric and Yano, Masayuki and Tezaur, Irina and Iliescu, Traian}, year={2025} }
-@article{fresca2021, title={A Comprehensive Deep Learning-Based Approach to Reduced Order Modeling of Nonlinear Time-Dependent Parametrized PDEs}, author={Fresca, Stefania and Dede', Luca and Manzoni, Andrea}, year={2021} }
+@article{fresca2021,
+  title={A Comprehensive Deep Learning-Based Approach to Reduced Order Modeling of Nonlinear Time-Dependent Parametrized PDEs},
+  author={Fresca, Stefania and Ded{\`e}, Luca and Manzoni, Andrea},
+  journal={Journal of Scientific Computing},
+  volume={87},
+  number={2},
+  pages={61},
+  year={2021},
+  publisher={Springer},
+  doi={10.1007/s10915-021-01451-z}
+}
 @article{kastor2026, title={Parameter conditioned interpretable U-Net surrogate model for data-driven predictions of convection-diffusion-reaction processes}, author={Kastor, Michael Urs Lars and Rottmayer, Jan and Hundertmark, Anna and Gauger, Nicolas Ralph}, year={2026} }
 @article{zhu2023, title={Fourier-DeepONet}, author={Zhu, Min and Feng, Shihang and Lin, Youzuo and Lu, Lu}, year={2023} }
-@article{cao2023, title={LNO: Laplace Neural Operator for Solving Differential Equations}, author={Cao, Qianying and Goswami, Somdatta and Karniadakis, George Em}, year={2023} }
+@misc{cao2023,
+  title={{LNO}: {Laplace} Neural Operator for Solving Differential Equations},
+  author={Cao, Qianying and Goswami, Somdatta and Karniadakis, George Em},
+  year={2023},
+  eprint={2303.10528},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
+}
 @article{reyes2025, title={The Frequency Reduced-Basis method: Reduced order models for time-dependent problems using the Laplace transform}, author={Reyes, Ricardo}, year={2025} }
 @article{goeckner2022, title={Model Order Reduction in Contour Integral Methods for Parametric PDEs}, author={Goeckner, et al.}, year={2022} }
 @article{guglielmi2020, title={Numerical inverse Laplace transform for convection-diffusion equations}, author={Guglielmi, Nicola and L{\'o}pez-Fern{\'a}ndez, Mar{\'\i}a and Nino, Giancarlo}, year={2020} }
 @article{mounayer2025, title={Rank Reduction Autoencoders}, author={Mounayer, Jad and Rodriguez, Sebastian and Ghnatios, Chady and Farhat, Charbel and Chinesta, Francisco}, year={2025} }
 
-@article{raissi2019, title={Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations}, author={Raissi, Maziar and Perdikaris, Paris and Karniadakis, George E}, journal={Journal of Computational physics}, volume={378}, pages={686--707}, year={2019}, publisher={Elsevier} }
-@article{lee2020, title={Model reduction of dynamical systems on nonlinear manifolds using deep convolutional autoencoders}, author={Lee, Kookjin and Carlberg, Kevin T}, journal={Journal of Computational Physics}, volume={404}, pages={108973}, year={2020}, publisher={Elsevier} }
-@book{hesthaven2015, title={Certified reduced basis methods for parametrized partial differential equations}, author={Hesthaven, Jan S and Rozza, Gianluigi and Stamm, Benjamin}, year={2015}, publisher={Springer} }
-@article{lu2022pod, title={A comprehensive and fair comparison of two neural operators (with practical extensions) based on FAIR data}, author={Lu, Lu and Meng, Xuhui and Cai, Shengze and Mao, Zhiping and Goswami, Somdatta and Zhang, Zhongqiang and Karniadakis, George Em}, journal={Computer Methods in Applied Mechanics and Engineering}, volume={393}, pages={114778}, year={2022}, publisher={Elsevier} }
+@article{raissi2019,
+  title={Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations},
+  author={Raissi, Maziar and Perdikaris, Paris and Karniadakis, George~E},
+  journal={Journal of Computational Physics},
+  volume={378},
+  pages={686--707},
+  year={2019},
+  publisher={Elsevier},
+  doi={10.1016/j.jcp.2018.10.045}
+}
+@article{lee2020,
+  title={Model reduction of dynamical systems on nonlinear manifolds using deep convolutional autoencoders},
+  author={Lee, Kookjin and Carlberg, Kevin T},
+  journal={Journal of Computational Physics},
+  volume={404},
+  pages={108973},
+  year={2020},
+  publisher={Elsevier},
+  doi={10.1016/j.jcp.2019.108973}
+}
+@book{hesthaven2015,
+  title={Certified Reduced Basis Methods for Parametrized Partial Differential Equations},
+  author={Hesthaven, Jan S and Rozza, Gianluigi and Stamm, Benjamin},
+  year={2015},
+  publisher={Springer},
+  doi={10.1007/978-3-319-22470-1}
+}
+@article{lu2022pod,
+  title={A comprehensive and fair comparison of two neural operators (with practical extensions) based on {FAIR} data},
+  author={Lu, Lu and Meng, Xuhui and Cai, Shengze and Mao, Zhiping and Goswami, Somdatta and Zhang, Zhongqiang and Karniadakis, George Em},
+  journal={Computer Methods in Applied Mechanics and Engineering},
+  volume={393},
+  pages={114778},
+  year={2022},
+  publisher={Elsevier},
+  doi={10.1016/j.cma.2022.114778}
+}
 
 

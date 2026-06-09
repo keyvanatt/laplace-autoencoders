@@ -38,13 +38,18 @@
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 \usepackage[pdfencoding=auto]{hyperref}
+\usepackage{authblk}
+\renewcommand\Affilfont{\small}
 
 \newcommand{\vmu}{\bm{\mu}}
 \newcommand{\R}{\mathbb{R}}
 
-\title{Model order reduction for a transient reaction-diffusion problem using the Laplace transform}
-\author{Keyvan Attarian\footnote{Ecole polytechnique, Institut polytechnique de Paris},
-Amine Ammar\footnote{ENSAM}}
+\title{Model order reduction for a transient reaction-convection-diffusion problem using the Laplace transform}
+\author[1,2]{Keyvan Attarian}
+\author[3,2]{Amine Ammar}
+\affil[1]{Ecole polytechnique, Institut Polytechnique de Paris}
+\affil[2]{DesCartes Program, WP8, CNRS@CREATE}
+\affil[3]{ENSAM}
 \date{Printed \today}
 
 \begin{document}
@@ -54,7 +59,7 @@ Amine Ammar\footnote{ENSAM}}
 \setcounter{tocdepth}{1}
 
 \begin{abstract}
-Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models, combined with a lightweight UNet residual corrector to mitigate spectral truncation artifacts, significantly improves prediction accuracy. The best surrogate model achieves a relative $L^2$ error of ???\%, compared to ???\% for the linear SVD baseline and a reconstruction floor of ???\%, while providing a ???$\times$ speedup over the high-fidelity solver.
+Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models, combined with a lightweight UNet residual corrector to mitigate spectral truncation artifacts, significantly improves prediction accuracy. The best surrogate model achieves a relative $L^2$ error of ???\%, compared to ???\% for the linear SVD baseline, while providing a ???$\times$ speedup over the high-fidelity solver.
 \end{abstract}
 
 \tableofcontents
@@ -69,7 +74,7 @@ To overcome the linear floor, two main families of data-driven approaches have e
 
 Spectral decompositions offer an alternative perspective for transient PDEs. FNO \cite{li2021fno} parameterizes the integral kernel directly in the Fourier space, giving it remarkable efficiency on periodic or quasi-stationary problems. However, the Fourier transform implicitly assumes periodicity and is poorly suited for transient signals: it struggles to represent the natural exponential growth or decay of solutions and suffers from Gibbs artifacts in the presence of temporal discontinuities. The Laplace transform $s = \gamma + i\omega$ generalizes Fourier by adding a real decay axis $\gamma$ that naturally encodes transients, exponential stability, and non-periodic regimes. Each frequency field $\hat{U}(s_k)$ is a static complex spatial field, structurally simpler to compress than an entire temporal sequence. The Laplace Neural Operator (LNO) \cite{cao2023} illustrates this advantage: by exploiting the pole-residual relationship in the Laplace domain, LNO surpasses FNO on transient responses and non-periodic signals for benchmark ODEs and PDEs. Regarding linear reduction, recent works exploit the Laplace domain to construct reduced bases: Reyes \cite{reyes2025} shows via the Paley-Wiener theorem that the Laplace domain produces exponentially accurate POD bases for evolution problems, and Goeckner et al. \cite{goeckner2022} extend this to parametric PDEs via contour integral methods. Nonetheless, these approaches remain fundamentally linear. The remaining gap is to replace this linear compression with non-linear autoencoders jointly learned with a parametric surrogate, enabling end-to-end differentiable training thanks to the exact invertibility of the transform \cite{guglielmi2020}.
 
-We consider the surrogate modeling of parametric transient PDEs, where the goal is to learn the mapping $\vmu \mapsto \bigl(U(t)\bigr)_{t=1}^{N_t}$ without running the numerical solver. Here $\vmu \in \R^p$ is a vector of physical parameters, $U(t) \in \R^{N_x}$ is the discretized spatial field at discrete time step $t \in \{1,\ldots,N_t\}$, $N_x$ is the number of spatial nodes, $N_t$ the number of time steps, and $K$ the number of Laplace frequency samples used in the spectral decomposition. This paper proposes to exploit the Laplace transform as a spectral compression tool for the spatiotemporal field, combined with non-linear autoencoders. Two AE strategies are systematically compared: compression in the physical domain frequency-by-frequency (SLAE), and compression in the temporal latent space prior to transformation (LLAE). For each, two surrogate strategies are examined: direct embedding prediction and SVD dimensionality reduction. End-to-end training is made possible by the differentiability of the inversion operator. A lightweight UNet residual corrector addresses Gibbs artifacts stemming from spectral truncation. Our contributions are threefold: (1) Formulation and comparison of two AE architectures in the Laplace domain (SLAE vs LLAE) with direct and SVD-compressed surrogate variants; (2) Demonstration that end-to-end training is indispensable for bridging the gap between the reconstruction floor and the surrogate prediction; (3) Introduction of a differentiable UNet residual corrector for mitigating spectral artifacts.
+We consider the surrogate modeling of parametric transient PDEs, where the goal is to learn the mapping $\vmu \mapsto \bigl(U(t)\bigr)_{t=1}^{N_t}$ without running the numerical solver. Here $\vmu \in \R^p$ is a vector of physical parameters, $U(t) \in \R^{N_x}$ is the discretized spatial field at discrete time step $t \in \{1,\ldots,N_t\}$, $N_x$ is the number of spatial nodes, $N_t$ the number of time steps, and $K$ the number of Laplace frequency samples used in the spectral decomposition. This paper proposes to exploit the Laplace transform as a spectral compression tool for the spatiotemporal field, combined with non-linear autoencoders. Two AE strategies are systematically compared: compression in the physical domain frequency-by-frequency (SLAE), and compression in the temporal latent space prior to transformation (LLAE). For each, two surrogate strategies are examined: direct embedding prediction and SVD dimensionality reduction. End-to-end training is made possible by the differentiability of the inversion operator. A lightweight UNet residual corrector addresses Gibbs artifacts stemming from spectral truncation. Our contributions are threefold: (1) Formulation and comparison of two AE architectures in the Laplace domain (SLAE vs LLAE) with direct and SVD-compressed surrogate variants; (2) Demonstration that end-to-end fine-tuning of the decoder is indispensable for closing the gap between standalone AE performance and full surrogate accuracy; (3) Introduction of a differentiable UNet residual corrector for mitigating spectral artifacts.
 
 The remainder of this paper is organized as follows. Section 2 describes the methodology, detailing the Laplace transform, surrogate architectures, and the end-to-end training pipeline. Section 3 presents the numerical results and performance comparisons. Finally, Section 4 provides a discussion and concludes the work. The appendices detail the governing equations and architectural hyperparameters.
 
@@ -206,7 +211,7 @@ The two architectures are compared at the same scale in Figure~\ref{fig:ae_compa
 \subsection{Surrogate Training}
 \label{sec:surrogate}
 
-The surrogate model $g_{\bm{\theta}}$ replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the frozen decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE. Two strategies for constructing the surrogate target $w_k$ are described below.
+The surrogate model $g_{\bm{\theta}}$ replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE. Two strategies for constructing the surrogate target $w_k$ are described below.
 
 \subsubsection{Direct Embedding Prediction}
 
@@ -233,13 +238,13 @@ Both pipelines are illustrated in Figure~\ref{fig:direct_surr}.
         \caption{LLAE direct surrogate.}
         \label{fig:llae_surr}
     \end{subfigure}
-    \caption{Direct embedding prediction. The FreqSurrogate trunk MLP (4 layers, hidden dim 512) maps $\vmu$ to frequency-indexed latents, decoded by the frozen AE decoder. Left: SLAE predicts real latents $z(s_k)\in\R^{d_z}$. Right: LLAE predicts complex latents $\hat{z}(s_k)\in\C^{d_z}$ (stored as $2d_z$ reals).}
+    \caption{Direct embedding prediction. The FreqSurrogate trunk MLP (4 layers, hidden dim 512) maps $\vmu$ to frequency-indexed latents, decoded by the AE decoder. Left: SLAE predicts real latents $z(s_k)\in\R^{d_z}$. Right: LLAE predicts complex latents $\hat{z}(s_k)\in\C^{d_z}$ (stored as $2d_z$ reals).}
     \label{fig:direct_surr}
 \end{figure}
 
 \subsubsection{SVD Dimensionality Reduction}
 
-To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the latent sequence before training the surrogate. Given the latent codes $\{e_i(\vmu)\}_{i=1}^{M}$ collected over the training set (with $M = K$ for SLAE, $M = N_t$ for LLAE), a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $e_i \approx (e_i V) V^\top$. The reduced codes $G_i(\vmu) = e_i(\vmu)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
+To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the latent sequence before training the surrogate, an approach inspired by \cite{mounayer2025}. Given the latent codes $\{e_i(\vmu)\}_{i=1}^{M}$ collected over the training set (with $M = K$ for SLAE, $M = N_t$ for LLAE), a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $e_i \approx (e_i V) V^\top$. The reduced codes $G_i(\vmu) = e_i(\vmu)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
 
 For SLAE (latents indexed by frequency $k$): the projection yields $G(s_k) = z(s_k)\,V$, and the surrogate predicts in the compressed frequency-domain space:
 \begin{equation}
@@ -254,7 +259,7 @@ The LLAE-SVD pipeline is illustrated in Figure~\ref{fig:svd_surr}.
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{gen_lslae_surr.pdf}
-    \caption{SVD surrogate pipeline (shown for LLAE). An offline SVD compresses the latent sequence to $G(t)=z(t)V\in\R^{d_\mathrm{SVD}}$. The surrogate predicts Laplace-domain SVD codes $\hat{G}(s_k)\in\C^{d_\mathrm{SVD}}$ (stored as $2d_\mathrm{SVD}$ reals), which are inverted, back-projected via $V^\top$, and decoded by the frozen AE decoder.}
+    \caption{SVD surrogate pipeline (shown for LLAE). An offline SVD compresses the latent sequence to $G(t)=z(t)V\in\R^{d_\mathrm{SVD}}$. The surrogate predicts Laplace-domain SVD codes $\hat{G}(s_k)\in\C^{d_\mathrm{SVD}}$ (stored as $2d_\mathrm{SVD}$ reals), which are inverted, back-projected via $V^\top$, and decoded by the AE decoder.}
     \label{fig:svd_surr}
 \end{figure}
 
@@ -262,7 +267,17 @@ In both strategies, the entire pipeline is trained end-to-end to minimise the to
 \begin{equation}
     \mathcal{L}_{\mathrm{total}} = \alpha_{\mathrm{lat}} \|w_k^{\text{pred}} - w_k^{\text{true}}\|^2 + \alpha_{\mathrm{spat}} \|U_{\text{rec}} - U\|^2
 \end{equation}
-where $w_k^{\text{pred}}$ and $w_k^{\text{true}}$ denote the predicted and true Laplace-domain latents (either $z(s_k)$ or $\hat{G}(s_k)$ depending on the chosen strategy). End-to-end backpropagation allows gradients from the spatiotemporal MSE to flow through the frozen decoder and the inverse transform, updating the surrogate weights and, in the SVD variant, the projection basis $V$.
+where $w_k^{\text{pred}}$ and $w_k^{\text{true}}$ denote the predicted and true Laplace-domain latents (either $z(s_k)$ or $\hat{G}(s_k)$ depending on the chosen strategy). End-to-end backpropagation allows gradients from the spatiotemporal MSE to flow through the decoder and the inverse transform, jointly updating the surrogate weights, the AE decoder, and, in the SVD variant, the projection basis $V$.
+
+\subsubsection{Tucker Decomposition in Latent Space}
+
+The SVD approach described above reduces the latent sequence along a single mode at a time: for LLAE it collapses the latent dimension $d_z$, leaving the time axis uncompressed; for SLAE it collapses $d_z$ independently at each frequency, ignoring cross-frequency correlations. Tucker decomposition \cite{kolda2009tensor} generalises this by simultaneously factorising two modes of the latent tensor. Assembling the LLAE training latents into a three-way tensor $\mathcal{Z} \in \mathbb{R}^{N_{\mathrm{train}} \times N_t \times d_z}$, a Tucker-$(r_t, r_z)$ approximation decomposes each slice as
+\begin{equation}
+    z_i(t) \;\approx\; U^{(t)}\, \mathcal{G}_i\, U^{(z)\top},
+    \qquad
+    U^{(t)} \in \mathbb{R}^{N_t \times r_t},\quad U^{(z)} \in \mathbb{R}^{d_z \times r_z},
+\end{equation}
+where $\mathcal{G}_i \in \mathbb{R}^{r_t \times r_z}$ is the simulation-specific core matrix and the factor matrices $U^{(t)}$, $U^{(z)}$ are shared across all training samples. The orthogonal factors are computed offline by the Higher-Order Orthogonal Iteration (HOOI) algorithm \cite{delathauwer2000hooi}, which alternates truncated SVD steps along each mode until convergence to a stationary point of the Frobenius-norm approximation error. The surrogate then learns the mapping $\vmu \mapsto \mathcal{G}(\vmu) \in \mathbb{R}^{r_t \times r_z}$, whose dimensionality $r_t \cdot r_z$ can be substantially smaller than the SVD target $N_t \cdot d_{\mathrm{SVD}}$ when temporal and latent correlations are jointly exploited. Reconstruction proceeds as $\tilde{z}(t) = U^{(t)}\,\mathcal{G}(\vmu)\,U^{(z)\top}$, followed by the decoder. The Laplace transform can be applied either to $\tilde{z}(t)$ in the full latent space (analogously to LLAE) or directly to the time-mode projection $G(t) = \mathcal{G}(\vmu) U^{(z)\top} \in \mathbb{R}^{r_t \times d_z}$ before inversion, offering an additional trade-off between compression ratio and spectral fidelity.
 
 \subsection{Choosing an Optimal Laplace Contour}
 \label{sec:contour_optim}
@@ -369,23 +384,169 @@ where $\rho$ is the fluid density, $\mathbf{U}$ is the velocity field, $\mu_{\ma
     \item $C$: Injection rate ($\mathrm{kg/m^3/s}$).
 \end{itemize} 
 
-The spatial domain is discretized into a uniform grid of $N_x = 128 \times 128 = 16{,}384$ nodes, and the temporal domain into $N_t = 150$ time steps with uniform step size $\Delta t = 1$\,s (total duration $T = 150$\,s). The parameter space has dimension $p = 3$ ($\vmu \in \R^3$). The quantity of interest in the methodology notation is $U(t) \in \R^{N_x}$, the discretized spatial field of $Y$ at time step $t \in \{1,\ldots,N_t\}$; the full space-time field is a matrix in $\R^{N_x \times N_t}$. The number of Laplace frequency samples $K$ is a model hyperparameter ($K = 16$ for both SLAE and LLAE; see Table~\ref{tab:ae_hparams}). The dataset comprises 1620 training simulations and 810 test simulations.
+The spatial domain is discretized into a uniform grid of $N_x = 128 \times 128 = 16{,}384$ nodes, and the temporal domain into $N_t = 150$ time steps with uniform step size $\Delta t = 1$\,s (total duration $T = 150$\,s). The parameter space has dimension $p = 3$ ($\vmu \in \R^3$). The quantity of interest in the methodology notation is $U(t) \in \R^{N_x}$, the discretized spatial field of $Y$ at time step $t \in \{1,\ldots,N_t\}$; the full space-time field is a matrix in $\R^{N_x \times N_t}$. The number of Laplace frequency samples $K$ is a model hyperparameter ($K = 16$ for both SLAE and LLAE; see Table~\ref{tab:ae_hparams}). The dataset comprises 6480 training simulations and 1620 test simulations.
 
 The performance of the models is evaluated quantitatively using the relative $L^2$ error over the held-out test set, defined as:
 \begin{equation}
     \epsilon_{\text{rel}} = \frac{\| Y_{\text{true}} - Y_{\text{pred}} \|_2}{\| Y_{\text{true}} \|_2}
 \end{equation}
-We first examine the autoencoder architectures, establishing the reconstruction floor, before evaluating the end-to-end surrogate models.
+We first characterize the autoencoder architectures in isolation, then evaluate the end-to-end surrogate models.
 
-\subsection{Autoencoder Reconstruction Floor}
+\subsection{Autoencoder Performance}
+\label{sec:ae_perf}
+
+Table~\ref{tab:ae_results} reports the relative $L^2$ reconstruction error on the held-out test set (1620 simulations) for all trained AE checkpoints, evaluated on the physical field $U(t)$.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{llcccrrr}
+        \toprule
+        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \midrule
+        \multirow{7}{*}{LLAE}
+          & 128 & 16 & 0.01  & 2.92 & 3.15 & 4.38 \\
+          & 64  & 32 & 0.01  & 3.19 & 3.53 & 5.11 \\
+          & 64  & 16 & 0.01  & 3.20 & 3.47 & 5.04 \\
+          & 64  & 16 & 0.0   & 3.26 & 3.61 & 5.24 \\
+          & 64  & 16 & 0.001 & 3.32 & 3.65 & 5.16 \\
+          & 64  & 8  & 0.01  & 3.35 & 3.66 & 5.26 \\
+          & 32  & 16 & 0.01  & 3.43 & 3.85 & 5.60 \\
+        \midrule
+        \multirow{7}{*}{SLAE}
+          & 64  & 16 & 0.0   & 7.78 & 8.11 & 9.91 \\
+          & 64  & 16 & 0.001 & 7.82 & 8.27 & 10.36 \\
+          & 128          & 16          & 0.01           & 7.98          & 8.40          & 10.45 \\
+          & 64           & 32          & 0.01           & 8.34          & 9.27          & 13.43 \\
+          & 64           & 16          & 0.01           & 8.92          & 9.53          & 12.55 \\
+          & 32           & 16          & 0.01           & 10.76         & 11.14         & 14.76 \\
+          & 64           & 8           & 0.01           & 12.26         & 12.74         & 15.40 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Relative $L^2$ reconstruction error on the test set (1620 simulations). Best per family in bold.}
+    \label{tab:ae_results}
+\end{table}
+
+Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints, sorted by median error with IQR error bars. LLAE consistently outperforms SLAE across all hyperparameter configurations, achieving a best median error of 2.92\% ($d_z=128$, $K=16$) versus 7.78\% for the best SLAE ($d_z=64$, $K=16$, $\gamma=0$). This gap stems from the nature of the compression problem each architecture faces. SLAE must encode each complex frequency frame $\hat{U}(s_k) \in \C^{N_x}$ with $N_x = 128^2$ spatial points independently; this is a spatially rich, high-dimensional input where the convolutional bottleneck is genuinely constraining. LLAE instead encodes single-channel physical frames $U(t) \in \R^{N_x}$ that are smoother and more structured, before applying the Laplace transform in the compact $d_z$-dimensional latent space, a substantially easier per-frame task.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{ae_bar_all.png}
+    \caption{Reconstruction error for all 14 AE checkpoints, sorted by median relative $L^2$ error on the test set ($n=1620$). Error bars indicate the interquartile range. LLAE variants (red) achieve consistently lower errors than SLAE variants (blue).}
+    \label{fig:ae_bar_all}
+\end{figure}
+
+Figures~\ref{fig:llae_ablation} and~\ref{fig:slae_ablation} report ablation studies for each family, varying one hyperparameter at a time while holding the others fixed.
+
+Within LLAE (Figure~\ref{fig:llae_ablation}), increasing the latent dimension from $d_z=32$ to $d_z=128$ reduces the median error from 3.43\% to 2.92\%, indicating that the latent bottleneck has not yet saturated at $d_z=64$. The number of Laplace frequencies $K$ has little impact: errors at $K=8$, 16, and 32 are 3.35\%, 3.20\%, and 3.19\% respectively, suggesting that 8–16 frequencies already capture the dominant transient dynamics. The damping parameter $\gamma$ is similarly insensitive in the range $[0, 0.01]$, consistent with the smooth energy envelope of the exponential decay at these timescales.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{llae_ablation.png}
+    \caption{LLAE ablation study. From left to right: effect of latent dimension $d_z$ ($K=16$, $\gamma=0.01$), number of Laplace frequencies $K$ ($d_z=64$, $\gamma=0.01$), and damping parameter $\gamma$ ($d_z=64$, $K=16$). Violin plots show the full error distribution; black line is the median, dashed orange line is the mean.}
+    \label{fig:llae_ablation}
+\end{figure}
+
+Within SLAE (Figure~\ref{fig:slae_ablation}), errors increase sharply at low $K$ ($K=8$: 12.26\%) and low $d_z$ ($d_z=32$: 10.76\%), pointing to a harder compression problem where both the spectral and spatial bottlenecks are binding simultaneously. Increasing $K$ to 32 does not improve reconstruction (8.34\% vs.\ 7.78\% at $K=16$), likely because higher Laplace frequencies carry less spatial energy and expose the spatial compression bottleneck. The SLAE error distribution also shows a heavier right tail (higher p90) than LLAE, reflecting occasional failure cases where spatial compression degrades on outlier samples.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{slae_ablation.png}
+    \caption{SLAE ablation study. Same layout as Figure~\ref{fig:llae_ablation} (fixed parameters: $K=16$, $\gamma=0.01$ / $d_z=64$, $\gamma=0.01$ / $d_z=64$, $K=16$). Note the larger y-axis range compared to LLAE.}
+    \label{fig:slae_ablation}
+\end{figure}
+
+For SLAE, Figure~\ref{fig:slae_per_freq} shows the reconstruction error broken down per Laplace frequency $k$. The error is lowest at low frequencies ($k=0$--3, where most signal energy is concentrated) and rises monotonically toward higher frequencies, confirming that the spatial compression bottleneck is more severe for the fine-scale, high-frequency content.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{slae_per_freq.png}
+    \caption{SLAE — per-frequency reconstruction error in the Laplace domain (median $\pm$ IQR, 200 test samples). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $d_z$. Error increases monotonically with frequency index $k$, reflecting the concentration of signal energy at low frequencies.}
+    \label{fig:slae_per_freq}
+\end{figure}
+
+\paragraph{Inference latency.}
+Table~\ref{tab:bench} and Figure~\ref{fig:bench} report per-sample inference latency and GPU throughput measured with CUDA Events on an NVIDIA RTX 3090 (10 warm-up runs, 50 timed runs, batch size 1 for latency; max batch size for throughput). SLAE is approximately $2.4\times$ faster per sample than LLAE at $K=16$ (8.0\,ms vs.\ $\sim\!19$–20\,ms), because its inference path processes only $K$ frequency frames through the decoder, whereas LLAE must decode all $N_t=150$ time frames. At $K=8$, SLAE latency drops to 5.5\,ms. SLAE also requires far less GPU memory (112\,MB at $K=16$ vs.\ 525\,MB for LLAE), enabling a $5\times$ larger maximum batch size.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lccrrr}
+        \toprule
+        \textbf{Model} & $K$ & $d_z$ & \textbf{Latency (ms)} & \textbf{Throughput (s/s)} & \textbf{Peak GPU (MB)} \\
+        \midrule
+        SLAE & 8  & 64  & $5.5 \pm 0.2$  & 224 & 56  \\
+        SLAE & 16 & 64  & $8.0 \pm 0.1$  & 134 & 112 \\
+        SLAE & 16 & 128 & $8.1 \pm 0.1$  & 133 & 112 \\
+        SLAE & 32 & 64  & $13.9 \pm 0.4$ &  74 & 224 \\
+        \midrule
+        LLAE & 16 & 32  & $19.0 \pm 1.1$ &  56 & 525 \\
+        LLAE & 16 & 64  & $19.4$--$20.1$ & 52--54 & 525 \\
+        LLAE & 16 & 128 & $19.0 \pm 0.8$ &  56 & 525 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Inference benchmark on an NVIDIA RTX 3090. Latency: batch size 1, 50 timed CUDA Event runs after 10 warm-up runs. Throughput at maximum GPU-filling batch size.}
+    \label{tab:bench}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{ae_inference_bench.png}
+    \caption{Inference benchmark on an NVIDIA RTX 3090. Left: per-sample latency (batch size 1, 50 CUDA Event runs). Right: throughput at maximum batch size. SLAE processes only $K$ frequency frames per sample, yielding $2.4\times$ lower latency and $5\times$ larger feasible batch size than LLAE.}
+    \label{fig:bench}
+\end{figure}
 
 \subsection{Surrogate Prediction Performance}
+
+Table~\ref{tab:surr_results} reports the relative $L^2$ error on the held-out test set (1620 simulations) for all trained surrogate checkpoints, evaluated on the physical field $U(t)$.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{llcccrrr}
+        \toprule
+        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \midrule
+        \multirow{7}{*}{LLAE}
+          & 128 & 16 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 32 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 16 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 16 & 0.0   & ??? & ??? & ??? \\
+          & 64  & 16 & 0.001 & ??? & ??? & ??? \\
+          & 64  & 8  & 0.01  & ??? & ??? & ??? \\
+          & 32  & 16 & 0.01  & ??? & ??? & ??? \\
+        \midrule
+        \multirow{7}{*}{SLAE}
+          & 64  & 16 & 0.0   & ??? & ??? & ??? \\
+          & 64  & 16 & 0.001 & ??? & ??? & ??? \\
+          & 128 & 16 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 32 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 16 & 0.01  & ??? & ??? & ??? \\
+          & 32  & 16 & 0.01  & ??? & ??? & ??? \\
+          & 64  & 8  & 0.01  & ??? & ??? & ??? \\
+        \bottomrule
+    \end{tabular}
+    \caption{Relative $L^2$ error on the test set (1620 simulations) for end-to-end surrogate models. Rows ordered as in Table~\ref{tab:ae_results}. Best per family in bold.}
+    \label{tab:surr_results}
+\end{table}
 
 \section{Comparison and Discussion}
 
 \subsection{Addressing Gibbs Oscillations: The Correction AE}
 \begin{appendices}
 \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+
+\section{Per-Checkpoint Error Distributions}
+\label{app:histograms}
+
+Figure~\ref{fig:ae_histograms} shows the distribution of relative $L^2$ errors across the 1620 test simulations for each of the 14 AE checkpoints evaluated in Section~\ref{sec:ae_perf}. Dashed lines indicate the median (black) and mean (orange); the dotted red line marks the 90th percentile.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{ae_histograms_all.png}
+    \caption{Per-checkpoint error histograms on the test set ($n=1620$). Each panel corresponds to one checkpoint; SLAE in blue, LLAE in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
+    \label{fig:ae_histograms}
+\end{figure}
 
 \section{Governing Equations}
 \label{app:equations}
@@ -427,7 +588,7 @@ Our neural surrogate model is designed to emulate the transient dynamics of a re
 \section{Architectural Details and Setup}
 \label{app:architecture}
 
-All models were trained using the Adam optimizer with a learning rate of $5 \times 10^{-4}$ for the autoencoders and $3 \times 10^{-4}$ for the surrogates, over 300 epochs. The autoencoders used a batch size of 256 (SLAE) or 16 (LLAE). Training was performed on a workstation equipped with an Intel(R) Xeon(R) w3-2435 CPU (62GB RAM) and an NVIDIA GeForce RTX 3090 GPU (24GB VRAM). Training data consists of 1620 simulations; the test set contains 810 samples.
+All models were trained using the AdamW optimizer (weight decay $10^{-4}$) with a learning rate of $5 \times 10^{-4}$ for the autoencoders, $3 \times 10^{-4}$ for the surrogate trunk, and $5 \times 10^{-5}$ for the fine-tuned decoder, over 300 epochs. The autoencoders used a batch size of 256 (SLAE) or 16 (LLAE). Training was performed on a workstation equipped with an Intel(R) Xeon(R) w3-2435 CPU (62GB RAM) and an NVIDIA GeForce RTX 3090 GPU (24GB VRAM). Training data consists of 6480 simulations; the test set contains 1620 samples.
 
 Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder architectures.
 
@@ -438,11 +599,11 @@ Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder ar
         \toprule
         \textbf{Group} & \textbf{Hyperparameter} & \textbf{SLAE} & \textbf{LLAE} \\
         \midrule
-        \multirow{4}{*}{Architecture}
+        \multirow{4}{*}{Architecture (baseline$^\dagger$)}
           & Latent dim $d_z$           & 64   & 64   \\
           & Frequencies $K$            & 16   & 16   \\
           & Sinusoidal levels $L$      & 8    & 8    \\
-          & Contour $\gamma$ & 0.0 & 0.0  \\
+          & Contour $\gamma$           & 0.01 & 0.01 \\
         \midrule
         \multirow{4}{*}{Regularization}
           & Ridge $\beta$              & $10^{-2}$ & $10^{-2}$ \\
@@ -457,8 +618,42 @@ Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder ar
           & Early stopping patience    & 40   & 40   \\
         \bottomrule
     \end{tabular}
-    \caption{Autoencoder hyperparameters.}
+    \caption{Autoencoder hyperparameters. $^\dagger$Baseline values fixed when the other architectural parameters are swept: $d_z \in \{32, 64, 128\}$, $K \in \{8, 16, 32\}$, $\gamma \in \{0.0, 0.001, 0.01\}$.}
     \label{tab:ae_hparams}
+\end{table}
+
+Table~\ref{tab:surr_hparams} summarises the hyperparameters used for surrogate training (Phase 2).
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{llcc}
+        \toprule
+        \textbf{Group} & \textbf{Hyperparameter} & \textbf{SLAE} & \textbf{LLAE} \\
+        \midrule
+        \multirow{4}{*}{Architecture (fixed)}
+          & Trunk layers $n_\text{trunk}$  & 4   & 4   \\
+          & Trunk hidden dim               & 512 & 512 \\
+          & Head layers $n_\text{head}$    & 2   & 2   \\
+          & Head hidden dim                & 256 & 256 \\
+        \midrule
+        \multirow{4}{*}{Loss}
+          & Latent weight $\alpha_\text{lat}$  & 1.0 & 1.0 \\
+          & Spatial weight $\alpha_\text{spat}$ & 1.0 & 1.0 \\
+          & Tikhonov $\alpha_t$                & $7\times10^{-3}$ & $7\times10^{-3}$ \\
+          & Tikhonov $\lambda$                 & $3\times10^{-5}$ & $3\times10^{-5}$ \\
+        \midrule
+        \multirow{6}{*}{Training}
+          & Epochs                        & 300  & 300  \\
+          & Batch size                    & 256  & 16   \\
+          & $lr_\text{surrogate}$         & $3\times10^{-4}$ & $3\times10^{-4}$ \\
+          & $lr_\text{decoder}$           & $5\times10^{-5}$ & $5\times10^{-5}$ \\
+          & Weight decay                  & $10^{-4}$ & $10^{-4}$ \\
+          & Early stopping patience       & 40   & 40   \\
+        \bottomrule
+    \end{tabular}
+    \caption{Surrogate training hyperparameters (Phase 2). MLP architecture and training setup are fixed across all runs; one surrogate is trained per AE checkpoint (14 total, sweeping $d_z$, $K$, $\gamma$ as in Table~\ref{tab:ae_hparams}). The AE decoder is fine-tuned at $lr_\text{decoder}$ while the surrogate MLP is trained at $lr_\text{surrogate}$.}
+    \label{tab:surr_hparams}
 \end{table}
 
 \section{Proofs for the Bias--Variance Contour Optimization}
@@ -475,8 +670,8 @@ Starting from decomposition \eqref{eq:bv_decomp} and applying the triangle inequ
 \]
 The first term equals $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}(\vmu)\|$ by \eqref{eq:bias_simplified}. For the second term, $\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu) = \bm{A}^{-1}\Re(\bm{F}^H(\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)))$. Applying sub-multiplicativity of the operator norm and $\|\Re(M)\| \leq \|M\|$ yields $\|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\| \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K}$, which gives \eqref{eq:bv_bound}. \hfill$\square$
 
-\textit{Proof Sketch} ($\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$).
-Consider an Autoencoder trained on the spatial fields at frequency $s_k$, with an encoder $f_\phi$ and a decoder $g_\psi$ mapping to a latent dimension $d_z$. The hypothesis space of non-linear autoencoders inherently includes linear transformations. Let $W_{\mathrm{enc}}$ and $W_{\mathrm{dec}}$ represent the optimal linear projection matrices derived from the SVD of the dataset matrix $\bm{U}^{(k)}$. By setting the network weights to these linear matrices and configuring the activation functions to operate in their locally linear regimes (e.g., linear regions of ReLU), the AE can exactly replicate the SVD reconstruction. Since the AE is trained over a superset of linear functions, the optimal non-linear parameters theoretically yield an expected error equal to or strictly less than the optimal linear SVD parameters for that frequency. \hfill$\square$
+\textit{Proof} ($\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$).
+A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection \cite{baldi1989}. Since a nonlinear autoencoder with the same bottleneck dimension optimizes over a strictly larger class of functions (which includes all linear encoder--decoder pairs), its minimum reconstruction error satisfies $\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$, as empirically confirmed in \cite{wang2016autoencoder}. \hfill$\square$
 
 \end{appendices}
 
