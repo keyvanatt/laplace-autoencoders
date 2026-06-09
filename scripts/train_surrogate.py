@@ -56,12 +56,13 @@ def main(cfg: DictConfig):
     mod_path, cls_name, model_cls = module_map[model_name]
     LightningModule = getattr(importlib.import_module(mod_path), cls_name)
 
-    # Lit K depuis le checkpoint AE, avant dm.setup() qui en a besoin
+    # Lit K et gamma_init depuis le checkpoint AE, avant dm.setup() qui en a besoin
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
     from omegaconf import open_dict
     ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
     with open_dict(cfg):
-        cfg.model.K = ae_hparams['K']
+        cfg.model.K          = ae_hparams['K']
+        cfg.model.gamma_init = ae_hparams['gamma_init']
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()
