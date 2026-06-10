@@ -284,11 +284,18 @@ if __name__ == '__main__':
 
         logger.experiment.finish()
 
-        # Incremental save so a crash doesn't lose completed configs
+        # Merge with any existing results from other parallel runs then save
         SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if SAVE_PATH.exists():
+            existing = torch.load(SAVE_PATH, map_location='cpu', weights_only=False)
+            merged_models = existing.get('models', {})
+        else:
+            merged_models = {}
+        merged_models.update(all_models)
+        all_configs = ckpt['configs']
         torch.save({
-            'models':  all_models,
-            'configs': configs,
+            'models':  merged_models,
+            'configs': all_configs,
             'NT': NT, 'N': ckpt['N'], 'DT': DT,
             'ALPHA_T': ALPHA_T, 'LAM': LAM,
             'theta_mean': ckpt['theta_mean'], 'theta_std': ckpt['theta_std'],
@@ -296,18 +303,5 @@ if __name__ == '__main__':
                           's_im': v['s_im'], 'k_svd_max': v['k_svd_max']}
                       for k, v in bases.items()},
         }, SAVE_PATH)
-        print(f'  (incremental save → {SAVE_PATH})')
-
-    # ---- Final save (no-op if loop completed cleanly) ----
-    SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        'models':  all_models,
-        'configs': configs,
-        'NT': NT, 'N': ckpt['N'], 'DT': DT,
-        'ALPHA_T': ALPHA_T, 'LAM': LAM,
-        'theta_mean': ckpt['theta_mean'], 'theta_std': ckpt['theta_std'],
-        'bases': {k: {'V_r': v['V_r'], 'V_i': v['V_i'],
-                      's_im': v['s_im'], 'k_svd_max': v['k_svd_max']}
-                  for k, v in bases.items()},
-    }, SAVE_PATH)
-    print(f'\nSaved to {SAVE_PATH}')
+        done = sorted(merged_models.keys())
+        print(f'  (saved → {SAVE_PATH}  |  done: {done})')
