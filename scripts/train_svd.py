@@ -7,13 +7,15 @@ Loss mirrors the AE surrogate:
 
 All configs are trained sequentially and saved in a single file: svd_surrogates.pt.
 """
+import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
+import tempfile
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
+from omegaconf import OmegaConf
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import DataLoader, TensorDataset
@@ -95,20 +97,27 @@ class SVDSurrogateLightningModule(pl.LightningModule):
         spat_loss = F.mse_loss(U_pred, U_true)
 
         loss = self.alpha_lat * lat_loss + self.alpha_spat * spat_loss
-        return loss, lat_loss, spat_loss
+        return loss, lat_loss, spat_loss, U_pred, U_true
 
     def training_step(self, batch, batch_idx):
-        loss, lat, spat = self._loss(batch)
-        self.log('train/loss', loss, on_step=True,  on_epoch=True, prog_bar=True)
-        self.log('train/lat',  lat,  on_step=False, on_epoch=True)
-        self.log('train/spat', spat, on_step=False, on_epoch=True)
+        loss, lat, spat, U_pred, U_true = self._loss(batch)
+        with torch.no_grad():
+            l2rel = ((U_pred.float() - U_true.float()).flatten(1).norm(dim=1)
+                     / (U_true.float().flatten(1).norm(dim=1) + 1e-8)).mean()
+        self.log('train/loss',  loss,  on_step=True,  on_epoch=True, prog_bar=True)
+        self.log('train/spat',  spat,  on_step=False, on_epoch=True)
+        self.log('train/lat',   lat,   on_step=False, on_epoch=True)
+        self.log('train/l2rel', l2rel, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, lat, spat = self._loss(batch)
-        self.log('val/loss', loss, on_epoch=True, prog_bar=True)
-        self.log('val/lat',  lat,  on_epoch=True)
-        self.log('val/spat', spat, on_epoch=True)
+        loss, lat, spat, U_pred, U_true = self._loss(batch)
+        l2rel = ((U_pred.float() - U_true.float()).flatten(1).norm(dim=1)
+                 / (U_true.float().flatten(1).norm(dim=1) + 1e-8)).mean()
+        self.log('val/loss',  loss,  on_epoch=True, prog_bar=True)
+        self.log('val/spat',  spat,  on_epoch=True)
+        self.log('val/lat',   lat,   on_epoch=True)
+        self.log('val/l2rel', l2rel, on_epoch=True, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
@@ -119,7 +128,7 @@ class SVDSurrogateLightningModule(pl.LightningModule):
         return {
             'optimizer': optimizer,
             'lr_scheduler': {'scheduler': scheduler,
-                             'monitor': 'val/loss', 'interval': 'epoch'},
+                             'monitor': 'val/l2rel', 'interval': 'epoch'},
         }
 
 
@@ -128,29 +137,36 @@ class SVDSurrogateLightningModule(pl.LightningModule):
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--tag', type=str, default=None,
+                        help='Run a single config, e.g. K16_ksvd64_g0.010. Omit to run all.')
+    args = parser.parse_args()
+
     SVD_CKPT   = 'checkpoints/svd_bases.pt'
     SAVE_PATH  = Path('checkpoints/svd_surrogates.pt')
-    WANDB_PROJECT = 'laplace-svd-surrogate'
+    WANDB_PROJECT = 'laplace-autoencoders'
 
-    HIDDEN_DIM  = 512
-    HEAD_DIM    = 256
-    N_TRUNK     = 4
-    N_HEAD      = 2
-    FREQ_L      = 6
-    ALPHA_LAT   = 1.0
-    ALPHA_SPAT  = 1.0
+    REPO_ROOT   = Path(__file__).parent.parent
+    arch_cfg    = OmegaConf.load(REPO_ROOT / 'configs/training/surrogate_arch.yaml')
+
+    HIDDEN_DIM  = arch_cfg.hidden_dim
+    HEAD_DIM    = arch_cfg.head_dim
+    N_TRUNK     = arch_cfg.n_trunk
+    N_HEAD      = arch_cfg.n_head
+    FREQ_L      = arch_cfg.freq_L
+    ALPHA_LAT   = arch_cfg.alpha_lat
+    ALPHA_SPAT  = arch_cfg.alpha_spat
     EPOCHS      = 300
     LR          = 3e-4
     BATCH_SIZE  = 64
     PATIENCE    = 40
     SEED        = 42
-    DEVICE      = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    torch.manual_seed(SEED); np.random.seed(SEED)
-    print(f'Device: {DEVICE}')
+    pl.seed_everything(SEED, workers=True)
+    torch.backends.cudnn.benchmark = True
 
     print(f'Loading {SVD_CKPT} ...')
-    ckpt       = torch.load(SVD_CKPT, map_location='cpu')
+    ckpt       = torch.load(SVD_CKPT, map_location='cpu', weights_only=False)
     configs    = ckpt['configs']
     bases      = ckpt['bases']
     coeffs_all = ckpt['coeffs']
@@ -160,15 +176,34 @@ if __name__ == '__main__':
     ALPHA_T    = ckpt['ALPHA_T']
     LAM        = ckpt['LAM']
 
+    if args.tag is not None:
+        matched = [(K, k_svd, g) for K, k_svd, g in configs
+                   if f'K{K}_ksvd{k_svd}_g{g:.3f}' == args.tag]
+        if not matched:
+            valid = [f'K{K}_ksvd{k_svd}_g{g:.3f}' for K, k_svd, g in configs]
+            raise ValueError(f'Unknown tag {args.tag!r}. Valid: {valid}')
+        configs = matched
+
     print(f'{len(configs)} configs to train:')
     for K, k_svd, g in configs:
         print(f'  K={K}  K_SVD={k_svd}  gamma={g}')
 
-    all_models = {}
+    # Load partial results so we can skip already-completed configs on restart
+    if SAVE_PATH.exists():
+        print(f'Resuming from {SAVE_PATH} ...')
+        partial = torch.load(SAVE_PATH, map_location='cpu', weights_only=False)
+        all_models = partial.get('models', {})
+        print(f'  Already done: {list(all_models.keys())}')
+    else:
+        all_models = {}
 
     for K, K_SVD, gamma in configs:
         tag     = f'K{K}_ksvd{K_SVD}_g{gamma:.3f}'
         key_base = f'K{K}_g{gamma:.3f}'
+
+        if tag in all_models:
+            print(f'\n=== {tag} — already done, skipping ===')
+            continue
 
         print(f'\n=== {tag} ===')
         torch.manual_seed(SEED)
@@ -213,26 +248,35 @@ if __name__ == '__main__':
         )
 
         # ---- Logger + Trainer ----
-        logger = WandbLogger(project=WANDB_PROJECT, name=tag, reinit=True)
+        logger = WandbLogger(project=WANDB_PROJECT, name=tag, group='svd_surr', reinit=True)
 
-        trainer = pl.Trainer(
-            max_epochs=EPOCHS,
-            accelerator='gpu' if DEVICE == 'cuda' else 'cpu',
-            devices=1,
-            logger=logger,
-            enable_checkpointing=False,
-            callbacks=[EarlyStopping(monitor='val/loss', patience=PATIENCE, mode='min')],
-            log_every_n_steps=10,
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ckpt_cb = ModelCheckpoint(
+                dirpath=tmpdir, filename='best',
+                monitor='val/l2rel', save_top_k=1, mode='min',
+            )
+            trainer = pl.Trainer(
+                max_epochs=EPOCHS,
+                accelerator='auto',
+                devices=1,
+                precision='16-mixed',
+                gradient_clip_val=1.0,
+                logger=logger,
+                callbacks=[ckpt_cb, EarlyStopping(monitor='val/l2rel', patience=PATIENCE, mode='min')],
+                log_every_n_steps=20,
+            )
 
-        trainer.fit(module, train_dl, val_dl)
+            trainer.fit(module, train_dl, val_dl)
 
-        best_state = {k: v.cpu().clone() for k, v in module.surrogate.state_dict().items()}
-        best_loss  = float(trainer.callback_metrics.get('val/loss', torch.tensor(float('nan'))))
+            best_ckpt  = torch.load(ckpt_cb.best_model_path, map_location='cpu', weights_only=False)
+            best_state = {k[len('surrogate.'):]: v
+                          for k, v in best_ckpt['state_dict'].items()
+                          if k.startswith('surrogate.')}
+        best_loss = float(trainer.callback_metrics.get('val/l2rel', torch.tensor(float('nan'))))
 
         all_models[tag] = {
             'model_state':     best_state,
-            'best_val_loss':   best_loss,
+            'best_val_l2rel':  best_loss,
             'coeff_mean':      coeff_mean,
             'coeff_std':       coeff_std,
             'K': K, 'K_SVD': K_SVD, 'gamma': gamma,
@@ -240,7 +284,21 @@ if __name__ == '__main__':
 
         logger.experiment.finish()
 
-    # ---- Save all ----
+        # Incremental save so a crash doesn't lose completed configs
+        SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        torch.save({
+            'models':  all_models,
+            'configs': configs,
+            'NT': NT, 'N': ckpt['N'], 'DT': DT,
+            'ALPHA_T': ALPHA_T, 'LAM': LAM,
+            'theta_mean': ckpt['theta_mean'], 'theta_std': ckpt['theta_std'],
+            'bases': {k: {'V_r': v['V_r'], 'V_i': v['V_i'],
+                          's_im': v['s_im'], 'k_svd_max': v['k_svd_max']}
+                      for k, v in bases.items()},
+        }, SAVE_PATH)
+        print(f'  (incremental save → {SAVE_PATH})')
+
+    # ---- Final save (no-op if loop completed cleanly) ----
     SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         'models':  all_models,
