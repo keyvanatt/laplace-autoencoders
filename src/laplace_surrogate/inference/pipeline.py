@@ -165,7 +165,6 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             head_dim    = ckpt.get('head_dim', 128),
             n_trunk     = ckpt.get('n_trunk', 4),
             n_head      = ckpt.get('n_head', 2),
-            k_max       = ckpt.get('k_max'),
             freq_L      = ckpt.get('freq_L', 8),
             surr_freq_L = ckpt.get('surr_freq_L', 6),
         ).to(device)

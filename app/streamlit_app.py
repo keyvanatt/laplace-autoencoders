@@ -31,11 +31,21 @@ THETA_PARAMS = [
     ('C (Injection rate kg/m³/s)',   0.005, 0.02,   0.0125, '%.4f'),
 ]
 
-MODELS = {
-    'Baseline':  'checkpoints/SLAEModel_best.pt',
-    'Finetuned': 'checkpoints/SLAEModel_finetuned.pt',
-    'Corrected': 'checkpoints/CorrectionAE_best.pt',
-}
+_SURROGATE_PREFIXES = ('SLAEModel__', 'LLAEModel__', 'LSLAEModel__',
+                       'SLAESVDModel__', 'LLAESVDModel__', 'CorrectionAE__')
+
+def _discover_models(ckpt_dir: str = 'checkpoints') -> dict[str, str]:
+    import glob, os
+    paths = sorted(glob.glob(os.path.join(ckpt_dir, '*.ckpt')) +
+                   glob.glob(os.path.join(ckpt_dir, '*.pt')))
+    models = {}
+    for p in paths:
+        name = os.path.splitext(os.path.basename(p))[0]
+        if any(name.startswith(pfx) for pfx in _SURROGATE_PREFIXES):
+            models[name] = p
+    return models
+
+MODELS = _discover_models()
 
 CKPT_K_MAX = 20
 NT         = 150
@@ -84,8 +94,10 @@ st.title('CH4 Transitoire — Surrogate Laplace AE')
 
 st.sidebar.header('Modèle')
 _model_names = list(MODELS.keys())
-model_key = st.sidebar.radio('Pipeline', _model_names,
-                              index=_model_names.index('Corrected'))
+if not _model_names:
+    st.error('Aucun checkpoint surrogate trouvé dans checkpoints/.')
+    st.stop()
+model_key = st.sidebar.selectbox('Pipeline', _model_names, index=0)
 
 st.sidebar.markdown('---')
 st.sidebar.header('Paramètres physiques θ')

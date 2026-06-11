@@ -1,7 +1,8 @@
 __pycache__
 .conda
 wandb
-notebooks/cache
+notebooks/cache*
+
 dataset/mnist
 .log/
 .hydra/
