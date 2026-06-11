@@ -176,4 +176,8 @@ PYTHONPATH=src .conda/bin/python -m pytest tests/ -q
 
 # Ablation sweep on latent_dim
 PYTHONPATH=src .conda/bin/python scripts/train_ae.py --multirun model=slae model.latent_dim=16,32,64,128
+
+# Extract plots from a notebook into article/images/
+python notebooks/extract_plots.py <notebook_stem>          # e.g. eval_checkpoints
+python notebooks/extract_plots.py <notebook_stem> --prefix fig_ --out article/images
 ```

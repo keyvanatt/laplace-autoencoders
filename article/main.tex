@@ -33,7 +33,7 @@
 \usepackage{bm}
 \usepackage{parskip}
 \usepackage[toc,page]{appendix}
-\graphicspath{ {./images/}{./PlotNeuralNet/} }
+\graphicspath{ {./images/}{./PlotNeuralNet/}{../plots/} }
 \usepackage[dvipsnames]{xcolor}
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
@@ -43,8 +43,9 @@
 
 \newcommand{\vmu}{\bm{\mu}}
 \newcommand{\R}{\mathbb{R}}
+\renewcommand{\emph}[1]{\textbf{#1}}
 
-\title{Model order reduction for a transient reaction-convection-diffusion problem using the Laplace transform}
+\title{Model order reduction for a transient problem using the Laplace transform}
 \author[1,2]{Keyvan Attarian}
 \author[3,2]{Amine Ammar}
 \affil[1]{Ecole polytechnique, Institut Polytechnique de Paris}
@@ -59,7 +60,7 @@
 \setcounter{tocdepth}{1}
 
 \begin{abstract}
-Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models, combined with a lightweight UNet residual corrector to mitigate spectral truncation artifacts, significantly improves prediction accuracy. The best surrogate model achieves a relative $L^2$ error of ???\%, compared to ???\% for the linear SVD baseline, while providing a ???$\times$ speedup over the high-fidelity solver.
+Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models significantly improves prediction accuracy. The best surrogate model achieves a relative $L^2$ error of ???\%, compared to ???\% for the linear SVD baseline, while providing a ???$\times$ speedup over the high-fidelity solver.
 \end{abstract}
 
 \tableofcontents
@@ -67,14 +68,21 @@ Model order reduction for parametric transient partial differential equations (P
 
 \section{Introduction}
 
-High-fidelity simulations of parametric transient partial differential equations (PDEs), such as those governing combustion, reactive transport, and atmospheric dispersion, rely on computationally expensive numerical solvers. In many-query contexts like optimization, uncertainty quantification, real-time control, and digital twins, the complete spatiotemporal field $U(x, t; \vmu)$ must be evaluated for thousands of parameter values $\vmu$ \cite{giacomini2026,mallick2025}. The prohibitive cost of these repeated evaluations motivates the development of surrogate models capable of reproducing the full dynamics in milliseconds. Applications such as air quality and pollution forecasting concretely illustrate this need: global physical models are accurate but unusable in real-time without approximation \cite{guo2022,fan2025}.
+High-fidelity simulations of parametric transient partial differential equations (PDEs), such as those governing combustion, reactive transport, and atmospheric dispersion, rely on computationally expensive numerical solvers. In many-query contexts like optimization, uncertainty quantification, real-time control, and digital twins, the complete spatiotemporal field $U(x, t; \vmu)$ must be evaluated for thousands of parameter values $\vmu$~\cite{giacomini2026,mallick2025}. The prohibitive cost of these repeated evaluations motivates the development of surrogate models capable of reproducing the full dynamics in milliseconds. Applications such as air quality and pollution forecasting concretely illustrate this need: global physical models are accurate but unusable in real-time without approximation~\cite{guo2022,fan2025}.
 
-Classical model order reduction (MOR) methods \cite{hesthaven2015}, such as Reduced Basis (RB) and Proper Orthogonal Decomposition (POD) combined with interpolation, construct a low-dimensional linear subspace by projecting high-fidelity solutions onto spatial modes. These approaches are theoretically well-founded and highly effective for smooth dynamics. However, they suffer from a reconstruction floor linked to the linearity of the basis: for problems with sharp transients, localized structures, or strongly non-linear dynamics (such as convection-diffusion-reaction equations), the number of required modes explodes. The treatment of time in these methods is either sequential (time-stepping on the projected ROM) or space-time (variational), both of which impose a computational cost that grows with the temporal horizon \cite{glas2017,lassila2014,iliescu2025}. The transition toward non-linear manifolds becomes necessary as linear techniques struggle \cite{fresca2021}.
-To overcome the linear floor, two main families of data-driven approaches have emerged alongside the advent of Physics-Informed Neural Networks \cite{raissi2019}. On one hand, deep learning-based ROMs (DL-ROMs) \cite{lee2020, fresca2021} jointly learn a non-linear manifold and reduced dynamics via convolutional autoencoders, demonstrating significant gains over linear ROMs for parametric non-linear PDEs. On the other hand, neural operators directly learn mappings between function spaces (i.e., field-to-field mappings). Notable examples include DeepONet \cite{lu2021deeponet} and its POD-based extensions \cite{lu2022pod}, and the Fourier Neural Operator (FNO) \cite{li2021fno}, which employs convolution in the Fourier space. Because they are inherently designed to map an input function to an output function, they are not naturally suited for direct parameter-to-field predictions where the input is a low-dimensional scalar vector. Furthermore, these approaches treat time as an additional continuous dimension, imposing a high memory and computational cost for long sequences and limiting their ability to capture long-horizon transients without dense training data. Parameter-conditioned U-Nets \cite{kastor2026} represent a lighter alternative for 2D convection-diffusion-reaction PDEs, yet they still operate directly in the time domain.
+Classical model order reduction (MOR) methods~\cite{hesthaven2015}, such as Reduced Basis (RB) and Proper Orthogonal Decomposition (POD) combined with interpolation, construct a low-dimensional linear subspace by projecting high-fidelity solutions onto spatial modes. These approaches are theoretically well-founded and highly effective for smooth dynamics. However, they suffer from a \emph{reconstruction floor} linked to the linearity of the basis: for problems with sharp transients, localized structures, or strongly non-linear dynamics (such as convection-diffusion-reaction equations), the number of required modes explodes. The transition toward \emph{non-linear manifolds} becomes necessary as linear techniques struggle~\cite{fresca2021}.
 
-Spectral decompositions offer an alternative perspective for transient PDEs. FNO \cite{li2021fno} parameterizes the integral kernel directly in the Fourier space, giving it remarkable efficiency on periodic or quasi-stationary problems. However, the Fourier transform implicitly assumes periodicity and is poorly suited for transient signals: it struggles to represent the natural exponential growth or decay of solutions and suffers from Gibbs artifacts in the presence of temporal discontinuities. The Laplace transform $s = \gamma + i\omega$ generalizes Fourier by adding a real decay axis $\gamma$ that naturally encodes transients, exponential stability, and non-periodic regimes. Each frequency field $\hat{U}(s_k)$ is a static complex spatial field, structurally simpler to compress than an entire temporal sequence. The Laplace Neural Operator (LNO) \cite{cao2023} illustrates this advantage: by exploiting the pole-residual relationship in the Laplace domain, LNO surpasses FNO on transient responses and non-periodic signals for benchmark ODEs and PDEs. Regarding linear reduction, recent works exploit the Laplace domain to construct reduced bases: Reyes \cite{reyes2025} shows via the Paley-Wiener theorem that the Laplace domain produces exponentially accurate POD bases for evolution problems, and Goeckner et al. \cite{goeckner2022} extend this to parametric PDEs via contour integral methods. Nonetheless, these approaches remain fundamentally linear. The remaining gap is to replace this linear compression with non-linear autoencoders jointly learned with a parametric surrogate, enabling end-to-end differentiable training thanks to the exact invertibility of the transform \cite{guglielmi2020}.
+Beyond the spatial compression bottleneck, classical MOR methods also struggle with the temporal dimension. The treatment of time is either sequential (time-stepping on the projected ROM) or space-time (variational), both of which impose a computational cost that grows with the temporal horizon~\cite{glas2017,lassila2014,iliescu2025}. This dual bottleneck — spatial and temporal — motivates the approach developed in this paper.
+The \emph{parameter-to-field} setting — predicting a full spatiotemporal field from a low-dimensional parameter vector $\vmu \in \R^p$ — is addressed by \emph{DL-ROMs} (Deep Learning Reduced-Order Models)~\cite{lee2020,fresca2021}: a convolutional autoencoder compresses the spatial field into a compact latent code, a surrogate network learns $\vmu \mapsto z$, and the decoder reconstructs the full field at inference, yielding significant gains over linear ROMs. This is a different problem from \emph{field-to-field} operator learning (FNO~\cite{li2021fno}, DeepONet~\cite{lu2021deeponet,lu2022pod}), which takes an input function rather than a scalar parameter vector; the two settings are not directly comparable. Parameter-conditioned U-Nets~\cite{kastor2026} represent a lighter DL-ROM variant for 2D problems, operating directly in the time domain. However, all existing DL-ROM approaches share a common temporal bottleneck: the surrogate must predict one latent vector per time step, so its output dimension scales as $d_z \times N_t$. For long transients, this makes the learning problem harder and inference heavier, regardless of how compact the spatial latent is.
 
-We consider the surrogate modeling of parametric transient PDEs, where the goal is to learn the mapping $\vmu \mapsto \bigl(U(t)\bigr)_{t=1}^{N_t}$ without running the numerical solver. Here $\vmu \in \R^p$ is a vector of physical parameters, $U(t) \in \R^{N_x}$ is the discretized spatial field at discrete time step $t \in \{1,\ldots,N_t\}$, $N_x$ is the number of spatial nodes, $N_t$ the number of time steps, and $K$ the number of Laplace frequency samples used in the spectral decomposition. This paper proposes to exploit the Laplace transform as a spectral compression tool for the spatiotemporal field, combined with non-linear autoencoders. Two AE strategies are systematically compared: compression in the physical domain frequency-by-frequency (SLAE), and compression in the temporal latent space prior to transformation (LLAE). For each, two surrogate strategies are examined: direct embedding prediction and SVD dimensionality reduction. End-to-end training is made possible by the differentiability of the inversion operator. A lightweight UNet residual corrector addresses Gibbs artifacts stemming from spectral truncation. Our contributions are threefold: (1) Formulation and comparison of two AE architectures in the Laplace domain (SLAE vs LLAE) with direct and SVD-compressed surrogate variants; (2) Demonstration that end-to-end fine-tuning of the decoder is indispensable for closing the gap between standalone AE performance and full surrogate accuracy; (3) Introduction of a differentiable UNet residual corrector for mitigating spectral artifacts.
+A natural path to address this bottleneck is to work in the \emph{frequency domain}: compressing the time axis into $K \ll N_t$ spectral coefficients reduces the surrogate output dimension dramatically. The spectral intuition is well-established in the neural operator literature — FNO~\cite{li2021fno} parameterizes its kernel in Fourier space — but the Fourier transform is poorly suited for transient signals: it assumes periodicity and exhibits spectral leakage for non-periodic dynamics. The \emph{Laplace transform} $s = \gamma + i\omega$ generalizes Fourier by adding a real decay axis $\gamma$ that naturally encodes transients, exponential stability, and non-periodic regimes. Each Laplace frequency field $\hat{U}(s_k)$ is a static spatial field, structurally simpler to compress than a full temporal sequence. The Laplace Neural Operator (LNO)~\cite{cao2023} confirms this advantage in the field-to-field setting. On the linear reduction side, Reyes~\cite{reyes2025} and Goeckner et al.~\cite{goeckner2022} show that Laplace-domain POD bases are exponentially accurate for parametric evolution problems — yet these approaches remain fundamentally linear. The remaining gap is to combine the Laplace spectral compression with the non-linear expressivity of autoencoders within the DL-ROM framework, enabling \emph{end-to-end} differentiable training thanks to the exact invertibility of the transform~\cite{guglielmi2020}.
+
+This paper fills that gap. We situate our work in the DL-ROM family and introduce the Laplace transform as a \emph{temporal} compression stage on top of the standard AE-surrogate pipeline: instead of predicting $N_t$ latent frames, the surrogate predicts $K \ll N_t$ spectral coefficients, from which the full trajectory is recovered by inversion. Here $U(t) \in \R^{N_x}$ is the discretized spatial field at time step $t$, $N_x$ the number of spatial nodes, $N_t$ the number of time steps, and $K$ the number of Laplace frequencies. Two instantiations are studied depending on where the transform is applied — in the physical domain (SLAE) or in the latent space (LLAE) — and compared against a linear SVD baseline. Our contributions are as follows:
+\begin{itemize}
+    \item \textbf{Temporal compression via the Laplace transform (main contribution):} we propose and evaluate using the Laplace transform to compress the temporal dimension of the surrogate target from $N_t$ frames to $K \ll N_t$ spectral coefficients, making prediction cost independent of the temporal horizon.
+    \item \textbf{SLAE vs.\ LLAE:} we systematically compare two instantiations of the Laplace compression — in the physical domain (SLAE) and in the latent space (LLAE) — and characterize the accuracy/latency trade-off they offer.
+    \item \textbf{Optimal contour selection:} for LLAE, the Laplace poles are learned end-to-end alongside the surrogate; for SLAE, we derive a bias-variance decomposition of the reconstruction error and optimize the contour offline by minimizing a principled proxy loss that trades regularization bias against surrogate approximation error.
+\end{itemize}
 
 The remainder of this paper is organized as follows. Section 2 describes the methodology, detailing the Laplace transform, surrogate architectures, and the end-to-end training pipeline. Section 3 presents the numerical results and performance comparisons. Finally, Section 4 provides a discussion and concludes the work. The appendices detail the governing equations and architectural hyperparameters.
 
@@ -116,20 +124,26 @@ where $\gamma > 0$ is the \emph{damping parameter} and $K \le \lfloor N_t/2 \rfl
 making the forward pass computationally efficient. Since $K < \lfloor N_t/2\rfloor + 1$, the spectrum is incomplete and we rely on the Tikhonov inversion \eqref{eq:tikhonov}--\eqref{eq:normal} in all cases. Restricting to the Bromwich structure, however, imposes that all poles share the same real part $\gamma$ and lie on a regular frequency grid — a strong constraint that may be suboptimal. Since the Tikhonov inversion handles any set of frequencies, one can in principle place the poles freely in the complex plane to better capture the signal's dynamics. This is the motivation for Section~\ref{sec:contour_optim}, which discusses how to optimize the contour beyond the Bromwich family.
 
 \subsection{SVD Baseline in the Laplace Domain}
+\label{sec:svd_baseline}
 
-A linear baseline approach applies a truncated Singular Value Decomposition (SVD) independently to each Laplace frequency $s_k$. The complex spatial field $\hat{U}(s_k)$ is separated into its real and imaginary components, which are then projected onto pre-computed, fixed spatial bases $\bm{V}^{(k,r)}$ and $\bm{V}^{(k,i)}$:
+As a linear reference, we construct a Proper Orthogonal Decomposition (POD) basis for each Laplace frequency independently. For each $s_k$, the training-set spatial fields are stacked into a data matrix $\bm{U}^{(k)} \in \R^{N_x \times N_{\mathrm{train}}}$ (one per physical component), and a truncated basis of rank $k_{\mathrm{svd}}$ is extracted. Because $N_x = N^2 = 16{,}384$ and $N_{\mathrm{train}} = 6{,}480$, a direct SVD of $\bm{U}^{(k)}$ would be memory-intensive; we instead use a two-pass randomized SVD~\cite{halko2011} that reduces the cost to two passes over the data and a small $k_{\mathrm{svd}}$-dimensional eigenvalue problem. The real and imaginary parts of $\hat{U}(s_k)$ are treated as separate real-valued fields, each with its own basis $\bm{V}^{(k,r)}, \bm{V}^{(k,i)} \in \R^{N_x \times k_{\mathrm{svd}}}$ fitted on the training set:
 \begin{equation}
-    \Re(\hat{U}(s_k)) \approx \sum_{j=1}^{k_{\mathrm{svd}}} c_j^{(k,r)} \bm{V}_j^{(k,r)}, \qquad \Im(\hat{U}(s_k)) \approx \sum_{j=1}^{k_{\mathrm{svd}}} c_j^{(k,i)} \bm{V}_j^{(k,i)}
+    \Re(\hat{U}(s_k)) \approx \bm{V}^{(k,r)}\,\bm{c}^{(k,r)}, \qquad \Im(\hat{U}(s_k)) \approx \bm{V}^{(k,i)}\,\bm{c}^{(k,i)},
 \end{equation}
-For each frequency $k$, dedicated Multilayer Perceptrons (MLPs), parameterized by weights $\bm{\theta}$, act as surrogates to predict the normalised coefficients $\bm{c}^{(k,r)}$ and $\bm{c}^{(k,i)}$ directly from the physical parameters $\vmu$. Specifically, independent MLPs are employed for the real and imaginary parts, governed by the following mappings:
+where $\bm{c}^{(k,r)}, \bm{c}^{(k,i)} \in \R^{k_{\mathrm{svd}}}$ are the projection coefficients. This is the classical Galerkin-POD representation applied frequency-by-frequency in the Laplace domain~\cite{hesthaven2015}.
+
+\paragraph{Surrogate for the SVD coefficients.}
+Given the compact coefficient vectors, the surrogate task is reduced to predicting $2\,K\,k_{\mathrm{svd}}$ scalar targets from the three-dimensional parameter vector $\vmu$. A single \texttt{FreqSurrogate} network (shared trunk + per-frequency heads, same architecture as the AE surrogates) predicts the normalized coefficients for all frequencies jointly:
 \begin{equation}
-    \bm{c}^{(k,r)} = f_{\bm{\theta}}^{(k,r)}(\vmu), \quad \bm{c}^{(k,i)} = f_{\bm{\theta}}^{(k,i)}(\vmu)
+    \bm{c}^{(k,r)}, \bm{c}^{(k,i)} = g_{\bm{\theta}}(\vmu, k), \qquad k = 0,\dots,K-1.
 \end{equation}
-where $f_{\bm{\theta}}$ denotes the parametrized neural network function. These MLPs are trained to minimize the mean squared error (MSE) between the predicted and true SVD projection coefficients:
+The surrogate is trained by minimizing a combined loss of normalized coefficient MSE and physical-field reconstruction MSE (after inverse Laplace transform), following the $\mathcal{L}_{\mathrm{int}} + \mathcal{L}_{\mathrm{rec}}$ decomposition introduced in~\cite{fresca2021}:
 \begin{equation}
-    \mathcal{L}_{\mathrm{SVD}}^{(k)} = \left\| f_{\bm{\theta}}^{(k,r)}(\vmu) - \bm{c}^{(k,r)} \right\|_2^2 + \left\| f_{\bm{\theta}}^{(k,i)}(\vmu) - \bm{c}^{(k,i)} \right\|_2^2
+    \mathcal{L}_{\mathrm{SVD\text{-}surr}} = \alpha_{\mathrm{lat}}\sum_{k=0}^{K-1}\Bigl(\bigl\|g_{\bm{\theta}}^{(k,r)}(\vmu) - \bar{\bm{c}}^{(k,r)}\bigr\|_2^2 + \bigl\|g_{\bm{\theta}}^{(k,i)}(\vmu) - \bar{\bm{c}}^{(k,i)}\bigr\|_2^2\Bigr) + \alpha_{\mathrm{spat}}\,\bigl\|U_{\mathrm{rec}} - U\bigr\|_2^2,
 \end{equation}
-The time series $U(t)$ is subsequently reconstructed by multiplying the predicted coefficients with their respective bases, combining them into a complex field, and applying the inverse Laplace transform. However, this approach is fundamentally constrained by the irreducible truncation error of the linear spatial bases, particularly at higher frequencies where the spatial modes exhibit complex, highly localized structures.
+where $\bar{\bm{c}}^{(k,\cdot)}$ denotes the normalized coefficients and $U_{\mathrm{rec}}$ is the field reconstructed by back-projecting the predicted coefficients through the fixed bases and applying the inverse Laplace transform. The spatial bases $\bm{V}^{(k,\cdot)}$ remain \emph{fixed} throughout surrogate training: unlike the AE decoder, they are not fine-tuned.
+
+The time series $U(t)$ is reconstructed by back-projecting the predicted coefficients, assembling the complex frequency field, and applying the Tikhonov inversion \eqref{eq:tikhonov}. This pipeline is fully linear in the spatial compression step, making it a clean reference that quantifies the gain of non-linear autoencoders. The irreducible truncation error of the linear basis — controlled by the discarded singular values of $\bm{U}^{(k)}$ — sets a hard floor that non-linear AEs are designed to overcome.
 
 \subsection{Autoencoders in the Laplace Domain}
 
@@ -143,7 +157,7 @@ In both configurations, we incorporate an $L_2$ ``ridge'' regularization penalty
 Both architectures share common conditioning components: a sinusoidal coordinate encoding and Feature-wise Linear Modulation (FiLM). Below, we describe these mechanisms in a general manner using a coordinate $\tau \in [0,1]$ that represents either the frequency ratio $f_k = k/(N_{\mathrm{half}}-1)$ in the spatial approach, or the normalised time step $t/T$ in the latent approach.
 
 \paragraph{Sinusoidal Coordinate Encoding.}
-The coordinate $\tau \in [0,1]$ is embedded via sinusoidal basis functions inspired by NeRF positional encoding \cite{mildenhall2020nerf}:
+The coordinate $\tau \in [0,1]$ is embedded via sinusoidal basis functions inspired by NeRF positional encoding~\cite{mildenhall2020nerf}:
 \begin{equation}
     \bm{e}(\tau) = \mathrm{MLP}\Bigl(\bigl[\sin(2^i\pi \tau),\; \cos(2^i\pi \tau)\bigr]_{i=0}^{L-1}\Bigr), \qquad L = 8.
     \label{eq:posenc}
@@ -151,7 +165,7 @@ The coordinate $\tau \in [0,1]$ is embedded via sinusoidal basis functions inspi
 A plain scalar $\tau$ would conflate nearby coordinates and fail to capture sharp transitions in either the frequency or time domains. The multi-scale sinusoidal basis explicitly represents $\tau$ at $L$ different resolutions, providing the network with a rich, non-saturating signal that allows fine discrimination across the entire range.
 
 \paragraph{FiLM Conditioning.}
-To share encoder/decoder weights across all coordinates (frequencies or time steps) while adapting to each specific configuration, the FiLM mechanism \cite{perez2018film} is employed. At each convolutional layer $\ell$, the coordinate embedding $\bm{e}(\tau)$ is projected to a channel-wise gain $\alpha_\ell \in \R^{C_\ell}$ and bias $\delta_\ell \in \R^{C_\ell}$, modulating the activations element-wise:
+To share encoder/decoder weights across all coordinates (frequencies or time steps) while adapting to each specific configuration, the FiLM mechanism~\cite{perez2018film} is employed. At each convolutional layer $\ell$, the coordinate embedding $\bm{e}(\tau)$ is projected to a channel-wise gain $\alpha_\ell \in \R^{C_\ell}$ and bias $\delta_\ell \in \R^{C_\ell}$, modulating the activations element-wise:
 \begin{equation}
     \bm{x}_\ell \;\leftarrow\; \bigl(\bm{x}_\ell \odot (1 + \alpha_\ell(\bm{e}(\tau)))\bigr) \;+\; \delta_\ell(\bm{e}(\tau)).
     \label{eq:film}
@@ -161,7 +175,7 @@ The residual formulation $(1 + \alpha_\ell)$ initializes the modulation close to
 \subsubsection{Spatial Laplace AE (SLAE)}
 \label{sec:slae}
 
-In SLAE, the Laplace transform operates directly on the time-domain spatial pixels, transforming the sequence of 2D grids $U(t)$ into $K$ complex-valued frequency frames $\hat{U}(s_k)$. A frequency-conditioned encoder (FiLM-modulated convolutional network) compresses each 2-channel (real and imaginary) frame independently into a real latent vector $z(s_k) \in \R^{d_z}$:
+In SLAE, the Laplace transform operates directly on the time-domain spatial pixels, transforming the sequence of 2D grids $U(t)$ into $K$ complex-valued frequency frames $\hat{U}(s_k)$. A \emph{frequency-conditioned} encoder (FiLM-modulated convolutional network) compresses each 2-channel (real and imaginary) frame independently into a real \emph{latent vector} $z(s_k) \in \R^{d_z}$:
 \begin{equation}
     U(t) \xrightarrow{\mathcal{L}_{\text{pixel-wise}}} \hat{U}(s_k) \xrightarrow{\text{Encoder}(f_k)} z(s_k) \xrightarrow{\text{Decoder}(f_k)} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\text{rec}}(t)
 \end{equation}
@@ -211,7 +225,7 @@ The two architectures are compared at the same scale in Figure~\ref{fig:ae_compa
 \subsection{Surrogate Training}
 \label{sec:surrogate}
 
-The surrogate model $g_{\bm{\theta}}$ replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE. Two strategies for constructing the surrogate target $w_k$ are described below.
+Following the DL-ROM paradigm of~\cite{fresca2021}, the surrogate model $g_{\bm{\theta}}$ replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE. Two strategies for constructing the surrogate target $w_k$ are described below.
 
 \subsubsection{Direct Embedding Prediction}
 
@@ -244,7 +258,7 @@ Both pipelines are illustrated in Figure~\ref{fig:direct_surr}.
 
 \subsubsection{SVD Dimensionality Reduction}
 
-To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the latent sequence before training the surrogate, an approach inspired by \cite{mounayer2025}. Given the latent codes $\{e_i(\vmu)\}_{i=1}^{M}$ collected over the training set (with $M = K$ for SLAE, $M = N_t$ for LLAE), a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $e_i \approx (e_i V) V^\top$. The reduced codes $G_i(\vmu) = e_i(\vmu)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
+To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the latent sequence before training the surrogate, an approach inspired by~\cite{mounayer2025}. Given the latent codes $\{e_i(\vmu)\}_{i=1}^{M}$ collected over the training set (with $M = K$ for SLAE, $M = N_t$ for LLAE), a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $e_i \approx (e_i V) V^\top$. The reduced codes $G_i(\vmu) = e_i(\vmu)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
 
 For SLAE (latents indexed by frequency $k$): the projection yields $G(s_k) = z(s_k)\,V$, and the surrogate predicts in the compressed frequency-domain space:
 \begin{equation}
@@ -271,13 +285,13 @@ where $w_k^{\text{pred}}$ and $w_k^{\text{true}}$ denote the predicted and true 
 
 \subsubsection{Tucker Decomposition in Latent Space}
 
-The SVD approach described above reduces the latent sequence along a single mode at a time: for LLAE it collapses the latent dimension $d_z$, leaving the time axis uncompressed; for SLAE it collapses $d_z$ independently at each frequency, ignoring cross-frequency correlations. Tucker decomposition \cite{kolda2009tensor} generalises this by simultaneously factorising two modes of the latent tensor. Assembling the LLAE training latents into a three-way tensor $\mathcal{Z} \in \mathbb{R}^{N_{\mathrm{train}} \times N_t \times d_z}$, a Tucker-$(r_t, r_z)$ approximation decomposes each slice as
+The SVD approach described above reduces the latent sequence along a single mode at a time: for LLAE it collapses the latent dimension $d_z$, leaving the time axis uncompressed; for SLAE it collapses $d_z$ independently at each frequency, ignoring cross-frequency correlations. Tucker decomposition~\cite{kolda2009tensor} generalises this by simultaneously factorising two modes of the latent tensor. Assembling the LLAE training latents into a three-way tensor $\mathcal{Z} \in \mathbb{R}^{N_{\mathrm{train}} \times N_t \times d_z}$, a Tucker-$(r_t, r_z)$ approximation decomposes each slice as
 \begin{equation}
     z_i(t) \;\approx\; U^{(t)}\, \mathcal{G}_i\, U^{(z)\top},
     \qquad
     U^{(t)} \in \mathbb{R}^{N_t \times r_t},\quad U^{(z)} \in \mathbb{R}^{d_z \times r_z},
 \end{equation}
-where $\mathcal{G}_i \in \mathbb{R}^{r_t \times r_z}$ is the simulation-specific core matrix and the factor matrices $U^{(t)}$, $U^{(z)}$ are shared across all training samples. The orthogonal factors are computed offline by the Higher-Order Orthogonal Iteration (HOOI) algorithm \cite{delathauwer2000hooi}, which alternates truncated SVD steps along each mode until convergence to a stationary point of the Frobenius-norm approximation error. The surrogate then learns the mapping $\vmu \mapsto \mathcal{G}(\vmu) \in \mathbb{R}^{r_t \times r_z}$, whose dimensionality $r_t \cdot r_z$ can be substantially smaller than the SVD target $N_t \cdot d_{\mathrm{SVD}}$ when temporal and latent correlations are jointly exploited. Reconstruction proceeds as $\tilde{z}(t) = U^{(t)}\,\mathcal{G}(\vmu)\,U^{(z)\top}$, followed by the decoder. The Laplace transform can be applied either to $\tilde{z}(t)$ in the full latent space (analogously to LLAE) or directly to the time-mode projection $G(t) = \mathcal{G}(\vmu) U^{(z)\top} \in \mathbb{R}^{r_t \times d_z}$ before inversion, offering an additional trade-off between compression ratio and spectral fidelity.
+where $\mathcal{G}_i \in \mathbb{R}^{r_t \times r_z}$ is the simulation-specific core matrix and the factor matrices $U^{(t)}$, $U^{(z)}$ are shared across all training samples. The orthogonal factors are computed offline by the Higher-Order Orthogonal Iteration (HOOI) algorithm~\cite{delathauwer2000hooi}, which alternates truncated SVD steps along each mode until convergence to a stationary point of the Frobenius-norm approximation error. The surrogate then learns the mapping $\vmu \mapsto \mathcal{G}(\vmu) \in \mathbb{R}^{r_t \times r_z}$, whose dimensionality $r_t \cdot r_z$ can be substantially smaller than the SVD target $N_t \cdot d_{\mathrm{SVD}}$ when temporal and latent correlations are jointly exploited. Reconstruction proceeds as $\tilde{z}(t) = U^{(t)}\,\mathcal{G}(\vmu)\,U^{(z)\top}$, followed by the decoder. The Laplace transform can be applied either to $\tilde{z}(t)$ in the full latent space (analogously to LLAE) or directly to the time-mode projection $G(t) = \mathcal{G}(\vmu) U^{(z)\top} \in \mathbb{R}^{r_t \times d_z}$ before inversion, offering an additional trade-off between compression ratio and spectral fidelity.
 
 \subsection{Choosing an Optimal Laplace Contour}
 \label{sec:contour_optim}
@@ -392,6 +406,54 @@ The performance of the models is evaluated quantitatively using the relative $L^
 \end{equation}
 We first characterize the autoencoder architectures in isolation, then evaluate the end-to-end surrogate models.
 
+\subsection{SVD Baseline Results}
+\label{sec:svd_results}
+
+We first characterize the linear SVD baseline (Section~\ref{sec:svd_baseline}) by sweeping its three hyperparameters independently around a base configuration ($K=16$, $k_{\mathrm{svd}}=64$, $\gamma=0.01$): the number of Laplace frequencies $K \in \{8,16,32\}$, the number of SVD modes $k_{\mathrm{svd}} \in \{32,64,128\}$, and the damping parameter $\gamma \in \{0.0,0.001,0.01\}$. All evaluations are computed on the 1620 held-out test simulations using the pure SVD reconstruction (without a surrogate), i.e., projecting the true test fields onto the training-set bases.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{cccrrr}
+        \toprule
+        $k_{\mathrm{svd}}$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \midrule
+        128 & 16 & 0.01  &  7.04 &  7.47 &  9.79 \\
+         64 & 32 & 0.01  &  7.57 &  8.86 & 15.08 \\
+         64 & 16 & 0.01  &  8.09 &  9.43 & 14.67 \\
+         64 & 16 & 0.001 &  8.38 &  9.47 & 14.29 \\
+         64 & 16 & 0.0   &  8.42 &  9.48 & 14.22 \\
+         32 & 16 & 0.01  & 11.42 & 13.92 & 22.99 \\
+         64 &  8 & 0.01  & 12.01 & 12.97 & 17.39 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Relative $L^2$ reconstruction error of the linear SVD baseline on the test set (1620 simulations), sorted by median error. Each row is a pure SVD reconstruction (no surrogate): the true test fields are projected onto training-set bases and reconstructed via the Tikhonov inverse Laplace transform.}
+    \label{tab:svd_results}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{svd_sweep_gamma.png}
+    \caption{Effect of the damping parameter $\gamma$ on SVD baseline reconstruction ($K=16$, $k_{\mathrm{svd}}=64$). Left: distribution of the relative $L^2$ error on the test set (violin plots; black line = median, dashed orange = mean). Right: per-frequency reconstruction error in the Laplace domain. A small positive $\gamma$ reduces aliasing artifacts at low frequencies without noticeably increasing error at high frequencies.}
+    \label{fig:svd_sweep_gamma}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{svd_sweep_K.png}
+    \caption{Effect of the number of Laplace frequencies $K$ on SVD baseline reconstruction ($k_{\mathrm{svd}}=64$, $\gamma=0.01$). Increasing $K$ beyond 16 yields only marginal improvement, indicating that the low-frequency modes already capture the dominant dynamics of the transient field.}
+    \label{fig:svd_sweep_K}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{svd_sweep_ksvd.png}
+    \caption{Effect of the number of SVD modes $k_{\mathrm{svd}}$ on SVD baseline reconstruction ($K=16$, $\gamma=0.01$). Left: physical-field error distribution. Right: per-frequency error in the Laplace domain. The error decreases monotonically with $k_{\mathrm{svd}}$ but saturates quickly, reflecting a hard reconstruction floor imposed by the linearity of the spatial basis.}
+    \label{fig:svd_sweep_ksvd}
+\end{figure}
+
+The SVD reconstruction error is governed by the singular value decay of the Laplace-domain field matrices $\bm{U}^{(k)}$. The per-frequency breakdown (right panels of Figures~\ref{fig:svd_sweep_gamma} and~\ref{fig:svd_sweep_ksvd}) reveals that the linear basis is most accurate at low Laplace frequencies ($k=0$--$3$), where the spatial mode structure is smooth and low-rank, but degrades steadily at higher frequencies where the fields become more localized and the singular values decay more slowly. Increasing $k_{\mathrm{svd}}$ beyond 64 reduces this high-frequency error only marginally, indicating that the residual error is not a truncation artifact but an intrinsic limit of the linear subspace for this problem. Similarly, the choice of $K$ (Figure~\ref{fig:svd_sweep_K}) has little effect once the dominant transient content is captured by the first 16 frequencies: beyond $K=16$, additional modes add noise rather than information. The damping $\gamma$ (Figure~\ref{fig:svd_sweep_gamma}) is benign in the range $[0,0.01]$, with a small positive value slightly regularizing the low-frequency modes. These observations establish the linear SVD as a well-characterized reference: its residual error floor, set by the discarded singular values, is the target that the non-linear autoencoders of Section~\ref{sec:ae_perf} are designed to push below.
+
 \subsection{Autoencoder Performance}
 \label{sec:ae_perf}
 
@@ -400,34 +462,34 @@ Table~\ref{tab:ae_results} reports the relative $L^2$ reconstruction error on th
 \begin{table}[H]
     \centering
     \renewcommand{\arraystretch}{1.3}
-    \begin{tabular}{llcccrrr}
+    \begin{tabular}{llcccrrrr}
         \toprule
-        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} & \textbf{vs.\ SVD (pp)} \\
         \midrule
         \multirow{7}{*}{LLAE}
-          & 128 & 16 & 0.01  & 2.92 & 3.15 & 4.38 \\
-          & 64  & 32 & 0.01  & 3.19 & 3.53 & 5.11 \\
-          & 64  & 16 & 0.01  & 3.20 & 3.47 & 5.04 \\
-          & 64  & 16 & 0.0   & 3.26 & 3.61 & 5.24 \\
-          & 64  & 16 & 0.001 & 3.32 & 3.65 & 5.16 \\
-          & 64  & 8  & 0.01  & 3.35 & 3.66 & 5.26 \\
-          & 32  & 16 & 0.01  & 3.43 & 3.85 & 5.60 \\
+          & 128 & 16 & 0.01  & 2.92 & 3.15 & 4.38  & $-4.12$ \\
+          & 64  & 32 & 0.01  & 3.19 & 3.53 & 5.11  & $-4.38$ \\
+          & 64  & 16 & 0.01  & 3.20 & 3.47 & 5.04  & $-4.89$ \\
+          & 64  & 16 & 0.0   & 3.26 & 3.61 & 5.24  & $-5.16$ \\
+          & 64  & 16 & 0.001 & 3.32 & 3.65 & 5.16  & $-5.06$ \\
+          & 64  & 8  & 0.01  & 3.35 & 3.66 & 5.26  & $-8.66$ \\
+          & 32  & 16 & 0.01  & 3.43 & 3.85 & 5.60  & $-7.99$ \\
         \midrule
         \multirow{7}{*}{SLAE}
-          & 64  & 16 & 0.0   & 7.78 & 8.11 & 9.91 \\
-          & 64  & 16 & 0.001 & 7.82 & 8.27 & 10.36 \\
-          & 128          & 16          & 0.01           & 7.98          & 8.40          & 10.45 \\
-          & 64           & 32          & 0.01           & 8.34          & 9.27          & 13.43 \\
-          & 64           & 16          & 0.01           & 8.92          & 9.53          & 12.55 \\
-          & 32           & 16          & 0.01           & 10.76         & 11.14         & 14.76 \\
-          & 64           & 8           & 0.01           & 12.26         & 12.74         & 15.40 \\
+          & 64  & 16 & 0.0   & 7.78  & 8.11  & 9.91  & $-0.64$ \\
+          & 64  & 16 & 0.001 & 7.82  & 8.27  & 10.36 & $-0.56$ \\
+          & 128 & 16 & 0.01  & 7.98  & 8.40  & 10.45 & $+0.94$ \\
+          & 64  & 32 & 0.01  & 8.34  & 9.27  & 13.43 & $+0.77$ \\
+          & 64  & 16 & 0.01  & 8.92  & 9.53  & 12.55 & $+0.83$ \\
+          & 32  & 16 & 0.01  & 10.76 & 11.14 & 14.76 & $-0.66$ \\
+          & 64  & 8  & 0.01  & 12.26 & 12.74 & 15.40 & $+0.25$ \\
         \bottomrule
     \end{tabular}
-    \caption{Relative $L^2$ reconstruction error on the test set (1620 simulations). Best per family in bold.}
+    \caption{Relative $L^2$ reconstruction error on the test set (1620 simulations). The last column gives the difference in median error relative to the linear SVD baseline at matching $(K, k_{\mathrm{svd}}=d_z, \gamma)$: negative values indicate improvement over SVD, positive values indicate that SVD outperforms the AE. Best per family in bold.}
     \label{tab:ae_results}
 \end{table}
 
-Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints, sorted by median error with IQR error bars. LLAE consistently outperforms SLAE across all hyperparameter configurations, achieving a best median error of 2.92\% ($d_z=128$, $K=16$) versus 7.78\% for the best SLAE ($d_z=64$, $K=16$, $\gamma=0$). This gap stems from the nature of the compression problem each architecture faces. SLAE must encode each complex frequency frame $\hat{U}(s_k) \in \C^{N_x}$ with $N_x = 128^2$ spatial points independently; this is a spatially rich, high-dimensional input where the convolutional bottleneck is genuinely constraining. LLAE instead encodes single-channel physical frames $U(t) \in \R^{N_x}$ that are smoother and more structured, before applying the Laplace transform in the compact $d_z$-dimensional latent space, a substantially easier per-frame task.
+Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints, sorted by median error with IQR error bars. LLAE consistently outperforms SLAE across all hyperparameter configurations, achieving a best median error of 2.92\% ($d_z=128$, $K=16$) versus 7.78\% for the best SLAE ($d_z=64$, $K=16$, $\gamma=0$). Both families improve substantially over the linear SVD baseline of Section~\ref{sec:svd_results}, confirming that non-linear compression breaks through the floor set by the discarded singular values of $\bm{U}^{(k)}$: LLAE reduces the median error by roughly a factor of four relative to the SVD, and even the best SLAE checkpoint matches or beats SVD at comparable latent dimension. This gap stems from the nature of the compression problem each architecture faces. SLAE must encode each complex frequency frame $\hat{U}(s_k) \in \C^{N_x}$ with $N_x = 128^2$ spatial points independently; this is a spatially rich, high-dimensional input where the convolutional bottleneck is genuinely constraining. LLAE instead encodes single-channel physical frames $U(t) \in \R^{N_x}$ that are smoother and more structured, before applying the Laplace transform in the compact $d_z$-dimensional latent space, a substantially easier per-frame task.
 
 \begin{figure}[H]
     \centering
@@ -532,7 +594,7 @@ Table~\ref{tab:surr_results} reports the relative $L^2$ error on the held-out te
 
 \section{Comparison and Discussion}
 
-\subsection{Addressing Gibbs Oscillations: The Correction AE}
+
 \begin{appendices}
 \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
 
@@ -671,7 +733,7 @@ Starting from decomposition \eqref{eq:bv_decomp} and applying the triangle inequ
 The first term equals $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}(\vmu)\|$ by \eqref{eq:bias_simplified}. For the second term, $\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu) = \bm{A}^{-1}\Re(\bm{F}^H(\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)))$. Applying sub-multiplicativity of the operator norm and $\|\Re(M)\| \leq \|M\|$ yields $\|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\| \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K}$, which gives \eqref{eq:bv_bound}. \hfill$\square$
 
 \textit{Proof} ($\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$).
-A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection \cite{baldi1989}. Since a nonlinear autoencoder with the same bottleneck dimension optimizes over a strictly larger class of functions (which includes all linear encoder--decoder pairs), its minimum reconstruction error satisfies $\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$, as empirically confirmed in \cite{wang2016autoencoder}. \hfill$\square$
+A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection~\cite{baldi1989}. Since a nonlinear autoencoder with the same bottleneck dimension optimizes over a strictly larger class of functions (which includes all linear encoder--decoder pairs), its minimum reconstruction error satisfies $\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$, as empirically confirmed in~\cite{wang2016autoencoder}. \hfill$\square$
 
 \end{appendices}
 

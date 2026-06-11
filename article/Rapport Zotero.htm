@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html><head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline' data:">
+		<title>Rapport Zotero</title>
+		<link rel="stylesheet" type="text/css" href="data:text/css;base64,Ym9keSB7Cgljb2xvci1zY2hlbWU6IGxpZ2h0IGRhcms7CgkvKiBUaGVzZSBzaG91bGQgYmUgdGhlIGRlZmF1bHRzLCBidXQganVzdCBpbiBjYXNlOiAqLwoJYmFja2dyb3VuZDogQ2FudmFzOwoJY29sb3I6IENhbnZhc1RleHQ7Cn0KCmEgewoJdGV4dC1kZWNvcmF0aW9uOiB1bmRlcmxpbmU7Cn0KCmJvZHkgewoJcGFkZGluZzogMDsKfQoKdWwucmVwb3J0IGxpLml0ZW0gewoJYm9yZGVyLXRvcDogNHB4IHNvbGlkICM1NTU7CglwYWRkaW5nLXRvcDogMWVtOwoJcGFkZGluZy1sZWZ0OiAxZW07CglwYWRkaW5nLXJpZ2h0OiAxZW07CgltYXJnaW4tYm90dG9tOiAyZW07Cn0KCmgxLCBoMiwgaDMsIGg0LCBoNSwgaDYgewoJZm9udC13ZWlnaHQ6IG5vcm1hbDsKfQoKaDIgewoJbWFyZ2luOiAwIDAgLjVlbTsKfQoKaDIucGFyZW50SXRlbSB7Cglmb250LXdlaWdodDogNjAwOwoJZm9udC1zaXplOiAxZW07CglwYWRkaW5nOiAwIDAgLjVlbTsKCWJvcmRlci1ib3R0b206IDFweCBzb2xpZCAjY2NjOwp9CgovKiBJZiBjb21iaW5pbmcgY2hpbGRyZW4sIGRpc3BsYXkgcGFyZW50IHNsaWdodGx5IGxhcmdlciAqLwp1bC5yZXBvcnQuY29tYmluZUNoaWxkSXRlbXMgaDIucGFyZW50SXRlbSB7Cglmb250LXNpemU6IDEuMWVtOwoJcGFkZGluZy1ib3R0b206IC43NWVtOwoJbWFyZ2luLWJvdHRvbTogLjRlbTsKfQoKaDIucGFyZW50SXRlbSAudGl0bGUgewoJZm9udC13ZWlnaHQ6IG5vcm1hbDsKfQoKaDMgewoJbWFyZ2luLWJvdHRvbTogLjZlbTsKCWZvbnQtd2VpZ2h0OiA2MDAgIWltcG9ydGFudDsKCWZvbnQtc2l6ZTogMWVtOwoJZGlzcGxheTogYmxvY2s7Cn0KCi8qIE1ldGFkYXRhIHRhYmxlICovCnRoIHsKCXZlcnRpY2FsLWFsaWduOiB0b3A7Cgl0ZXh0LWFsaWduOiByaWdodDsKCXdpZHRoOiAxNSU7Cgl3aGl0ZS1zcGFjZTogbm93cmFwOwp9Cgp0ZCB7CglwYWRkaW5nLWxlZnQ6IC41ZW07Cn0KCgp1bC5yZXBvcnQsIHVsLm5vdGVzLCB1bC50YWdzIHsKCWxpc3Qtc3R5bGU6IG5vbmU7CgltYXJnaW4tbGVmdDogMDsKCXBhZGRpbmctbGVmdDogMDsKfQoKLyogVGFncyAqLwpoMy50YWdzIHsKCWZvbnQtc2l6ZTogMS4xZW07Cn0KCnVsLnRhZ3MgewoJbGluZS1oZWlnaHQ6IDEuNzVlbTsKCWxpc3Qtc3R5bGU6IG5vbmU7Cn0KCnVsLnRhZ3MgbGkgewoJZGlzcGxheTogaW5saW5lOwp9Cgp1bC50YWdzIGxpOm5vdCg6bGFzdC1jaGlsZCk6YWZ0ZXIgewoJY29udGVudDogJywgJzsKfQoKCi8qIENoaWxkIG5vdGVzICovCmgzLm5vdGVzIHsKCWZvbnQtc2l6ZTogMS4xZW07Cn0KCnVsLm5vdGVzIHsKCW1hcmdpbi1ib3R0b206IDEuMmVtOwp9Cgp1bC5ub3RlcyA+IGxpOmZpcnN0LWNoaWxkIHAgewoJbWFyZ2luLXRvcDogMDsKfQoKdWwubm90ZXMgPiBsaSB7CglwYWRkaW5nOiAuN2VtIDA7Cn0KCnVsLm5vdGVzID4gbGk6bm90KDpsYXN0LWNoaWxkKSB7Cglib3JkZXItYm90dG9tOiAxcHggI2NjYyBzb2xpZDsKfQoKCnVsLm5vdGVzID4gbGkgcDpmaXJzdC1jaGlsZCB7CgltYXJnaW4tdG9wOiAwOwp9Cgp1bC5ub3RlcyA+IGxpIHA6bGFzdC1jaGlsZCB7CgltYXJnaW4tYm90dG9tOiAwOwp9CgovKiBBZGQgcXVvdGF0aW9uIG1hcmtzIGFyb3VuZCBibG9ja3F1b3RlICovCnVsLm5vdGVzID4gbGkgYmxvY2txdW90ZSBwOm5vdCg6ZW1wdHkpOmJlZm9yZSwKbGkubm90ZSBibG9ja3F1b3RlIHA6bm90KDplbXB0eSk6YmVmb3JlIHsKCWNvbnRlbnQ6ICfigJwnOwp9Cgp1bC5ub3RlcyA+IGxpIGJsb2NrcXVvdGUgcDpub3QoOmVtcHR5KTpsYXN0LWNoaWxkOmFmdGVyLApsaS5ub3RlIGJsb2NrcXVvdGUgcDpub3QoOmVtcHR5KTpsYXN0LWNoaWxkOmFmdGVyIHsKCWNvbnRlbnQ6ICfigJ0nOwp9CgovKiBQcmVzZXJ2ZSB3aGl0ZXNwYWNlIG9uIHBsYWludGV4dCBub3RlcyAqLwp1bC5ub3RlcyBsaSBwLnBsYWludGV4dCwgbGkubm90ZSBwLnBsYWludGV4dCwgZGl2Lm5vdGUgcC5wbGFpbnRleHQgewoJd2hpdGUtc3BhY2U6IHByZS13cmFwOwp9CgovKiBEaXNwbGF5IHRhZ3Mgd2l0aGluIGNoaWxkIG5vdGVzIGlubGluZSAqLwp1bC5ub3RlcyBoMy50YWdzIHsKCWRpc3BsYXk6IGlubGluZTsKCWZvbnQtc2l6ZTogMWVtOwp9Cgp1bC5ub3RlcyBoMy50YWdzOmFmdGVyIHsKCWNvbnRlbnQ6ICcgJzsKfQoKdWwubm90ZXMgdWwudGFncyB7CglkaXNwbGF5OiBpbmxpbmU7Cn0KCnVsLm5vdGVzIHVsLnRhZ3MgbGk6bm90KDpsYXN0LWNoaWxkKTphZnRlciB7Cgljb250ZW50OiAnLCAnOwp9CgoKLyogQ2hpbGQgYXR0YWNobWVudHMgKi8KaDMuYXR0YWNobWVudHMgewoJZm9udC1zaXplOiAxLjFlbTsKfQoKdWwuYXR0YWNobWVudHMgbGkgewoJcGFkZGluZy10b3A6IC41ZW07Cn0KCnVsLmF0dGFjaG1lbnRzIGRpdi5ub3RlIHsKCW1hcmdpbi1sZWZ0OiAyZW07Cn0KCnVsLmF0dGFjaG1lbnRzIGRpdi5ub3RlIHA6Zmlyc3QtY2hpbGQgewoJbWFyZ2luLXRvcDogLjc1ZW07Cn0KCmRpdiB0YWJsZSB7Cglib3JkZXItY29sbGFwc2U6IGNvbGxhcHNlOwp9CgpkaXYgdGFibGUgdGQsIGRpdiB0YWJsZSB0aCB7Cglib3JkZXI6IDFweCAjY2NjIHNvbGlkOwoJYm9yZGVyLWNvbGxhcHNlOiBjb2xsYXBzZTsKCXdvcmQtYnJlYWs6IGJyZWFrLWFsbDsKfQoKZGl2IHRhYmxlIHRkIHA6ZW1wdHk6OmFmdGVyLCBkaXYgdGFibGUgdGggcDplbXB0eTo6YWZ0ZXIgewoJY29udGVudDogIlwwMGEwIjsKfQoKZGl2IHRhYmxlIHRkICo6Zmlyc3QtY2hpbGQsIGRpdiB0YWJsZSB0aCAqOmZpcnN0LWNoaWxkIHsKCW1hcmdpbi10b3A6IDA7Cn0KCmRpdiB0YWJsZSB0ZCAqOmxhc3QtY2hpbGQsIGRpdiB0YWJsZSB0aCAqOmxhc3QtY2hpbGQgewoJbWFyZ2luLWJvdHRvbTogMDsKfQo=">
+		<link rel="stylesheet" type="text/css" media="screen,projection" href="data:text/css;base64,LyogR2VuZXJpYyBzdHlsZXMgKi8KYm9keSB7Cglmb250OiA2Mi41JSBHZW9yZ2lhLCBUaW1lcywgc2VyaWY7Cgl3aWR0aDogNzgwcHg7CgltYXJnaW46IDAgYXV0bzsKfQoKaDIgewoJZm9udC1zaXplOiAxLjVlbTsKCWxpbmUtaGVpZ2h0OiAxLjVlbTsKCWZvbnQtZmFtaWx5OiBHZW9yZ2lhLCBUaW1lcywgc2VyaWY7Cn0KCnAgewoJbGluZS1oZWlnaHQ6IDEuNWVtOwp9CgphOmFueS1saW5rIHsKCWNvbG9yOiAjOTAwOwp9CgphOmhvdmVyLCBhOmFjdGl2ZSB7Cgljb2xvcjogIzc3NzsKfQoKQG1lZGlhIChwcmVmZXJzLWNvbG9yLXNjaGVtZTogZGFyaykgewoJYTphbnktbGluayB7CgkJY29sb3I6ICNmMDA7Cgl9CgoJYTpob3ZlciwgYTphY3RpdmUgewoJCWNvbG9yOiAjOTk5OwoJfQp9CgoKdWwucmVwb3J0IHsKCWZvbnQtc2l6ZTogMS40ZW07Cgl3aWR0aDogNjgwcHg7CgltYXJnaW46IDAgYXV0bzsKCXBhZGRpbmc6IDIwcHggMjBweDsKfQoKLyogTWV0YWRhdGEgdGFibGUgKi8KdGFibGUgewoJYm9yZGVyOiAxcHggI2NjYyBzb2xpZDsKCW92ZXJmbG93OiBhdXRvOwoJd2lkdGg6IDEwMCU7CgltYXJnaW46IC4xZW0gYXV0byAuNzVlbTsKCXBhZGRpbmc6IDAuNWVtOwp9Cg==">
+		<link rel="stylesheet" type="text/css" media="print" href="data:text/css;base64,Ym9keSB7Cglmb250OiAxMnB0ICJUaW1lcyBOZXcgUm9tYW4iLCBUaW1lcywgR2VvcmdpYSwgc2VyaWY7CgltYXJnaW46IDA7Cgl3aWR0aDogYXV0bzsKfQoKLyogUGFnZSBCcmVha3MgKHBhZ2UtYnJlYWstaW5zaWRlIG9ubHkgcmVjb2duaXplZCBieSBPcGVyYSkgKi8KaDEsIGgyLCBoMywgaDQsIGg1LCBoNiB7CglwYWdlLWJyZWFrLWFmdGVyOiBhdm9pZDsKCXBhZ2UtYnJlYWstaW5zaWRlOiBhdm9pZDsKfQoKdWwsIG9sLCBkbCB7CglwYWdlLWJyZWFrLWluc2lkZTogYXZvaWQ7Cgljb2xvci1hZGp1c3Q6IGV4YWN0Owp9CgpoMiB7Cglmb250LXNpemU6IDEuM2VtOwoJbGluZS1oZWlnaHQ6IDEuM2VtOwp9CgphIHsKCWNvbG9yOiBpbmhlcml0OwoJdGV4dC1kZWNvcmF0aW9uOiBub25lOwp9Cg==">
+	</head>
+	<body>
+		<ul class="report combineChildItems">
+			<li id="item_QPRA3DU5" class="item journalArticle">
+			<h2>A Comprehensive Deep Learning-Based Approach to Reduced Order Modeling of Nonlinear Time-Dependent Parametrized PDEs</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Stefania Fresca</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Luca Dede’</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Andrea Manzoni</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Conventional reduced order modeling techniques such as the 
+reduced basis (RB) method (relying, e.g., on proper orthogonal 
+decomposition (POD)) may incur in severe limitations when dealing with 
+nonlinear time-dependent parametrized PDEs, as these are strongly 
+anchored to the assumption of modal linear superimposition they are 
+based on. For problems featuring coherent structures that propagate over
+ time such as transport, wave, or convectiondominated phenomena, the RB 
+method may yield inefﬁcient reduced order models (ROMs) when very high 
+levels of accuracy are required. To overcome this limitation, in this 
+work, we propose a new nonlinear approach to set ROMs by exploiting deep
+ learning (DL) algorithms. In the resulting nonlinear ROM, which we 
+refer to as DL-ROM, both the nonlinear trial manifold (corresponding to 
+the set of basis functions in a linear ROM) as well as the nonlinear 
+reduced dynamics (corresponding to the projection stage in a linear ROM)
+ are learned in a non-intrusive way by relying on DL algorithms; the 
+latter are trained on a set of full order model (FOM) solutions obtained
+ for different parameter values. We show how to construct a DL-ROM for 
+both linear and nonlinear time-dependent parametrized PDEs. Moreover, we
+ assess its accuracy and efﬁciency on different parametrized PDE 
+problems. Numerical results indicate that DL-ROMs whose dimension is 
+equal to the intrinsic dimensionality of the PDE solutions manifold are 
+able to efﬁciently approximate the solution of parametrized PDEs, 
+especially in cases for which a huge number of POD modes would have been
+ necessary to achieve the same degree of accuracy.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>05/2021</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1007/s10915-021-01462-7">10.1007/s10915-021-01462-7</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://link.springer.com/10.1007/s10915-021-01462-7">https://link.springer.com/10.1007/s10915-021-01462-7</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>12/05/2026 15:22:59</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>87</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>61</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Journal of Scientific Computing</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>0885-7474, 1573-7691</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>2</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>J Sci Comput</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>12/05/2026 15:22:59</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>19/05/2026 10:55:58</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_76ZRM3M3">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_5H7QT7KY" class="item journalArticle">
+			<h2>AI-Based Model Order Reduction Techniques: A Survey</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Swaroop Mallick</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Monika Mittal</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Model Order Reduction (MOR) techniques play a crucial role in 
+reducing the computational complexity of high-dimensional mathematical 
+models, enabling efficient simulations and analysis. In recent years, 
+Artificial Intelligence (AI) has emerged as a powerful tool in various 
+domains, including MOR. This survey paper provides an overview of 
+AI-based MOR techniques, exploring how AI methods are being integrated 
+into traditional MOR approaches. Different AI algorithms, such as 
+machine learning, deep learning, and evolutionary computing, and their 
+applications in MOR are discussed in this paper. The advantages, 
+challenges, and future directions of AI-based MOR techniques are also 
+highlighted.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>05/2025</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1007/s11831-024-10207-2">10.1007/s11831-024-10207-2</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://link.springer.com/10.1007/s11831-024-10207-2">https://link.springer.com/10.1007/s11831-024-10207-2</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>20/05/2026 11:36:45</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>AI-Based Model Order Reduction Techniques</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>32</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>2321-2346</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Archives of Computational Methods in Engineering</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>1134-3060, 1886-1784</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>4</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Arch Computat Methods Eng</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>20/05/2026 11:36:45</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>20/05/2026 12:04:13</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Survolé</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_VAWLG7ZP">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_Y3UEEFAM" class="item journalArticle">
+			<h2>Applications of artificial intelligence in the field of air pollution: A bibliometric analysis</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Qiangqiang Guo</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Mengjuan Ren</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Shouyuan Wu</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Yajia Sun</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Jianjian Wang</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Qi Wang</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Yanfang Ma</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Xuping Song</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Yaolong Chen</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Background: Artiﬁcial intelligence (AI) has become widely used
+ in a variety of ﬁelds, including disease prediction, environmental 
+monitoring, and pollutant prediction. In recent years, there has also 
+been an increase in the volume of research into the application of AI to
+ air pollution. This study aims to explore the latest trends in the 
+application of AI in the ﬁeld of air pollution.
+Methods: All literature on the application of AI to air pollution was 
+searched from the Web of Science database. CiteSpace 5.8.R1 was used to 
+analyze countries/regions, institutions, authors, keywords and 
+references cited, and to reveal hot spots and frontiers of AI in 
+atmospheric pollution.
+Results: Beginning in 1994, publications on AI in air pollution have 
+increased in number, with a surge in research since 2017. The leading 
+country and institution were China (N = 524) and the Chinese Academy of 
+Sciences (N = 58), followed by the United States (N = 455) and Tsinghua 
+University (N = 33), respectively. In addition, the United States (0.24)
+ and the England (0.27) showed a high degree of centrality. Most of the 
+identiﬁed articles were published in journals related to environmental 
+science; the most cited journal was Atmospheric Environment, which 
+reached nearly 1,000 citations. There were few collaborations among 
+authors, institutions and countries. The hot topics were machine 
+learning, air pollution and deep learning. The majority of the 
+researchers concentrated on air pollutant concentration prediction, 
+particularly the combined use of AI and environmental science methods, 
+low-cost air quality sensors, indoor air quality, and thermal comfort.
+Conclusion: Researches in the ﬁeld of AI and air pollution are expanding
+ rapidly in recent years. The majority of scholars are from China and 
+the United States, and the Chinese Academy of Sciences is the dominant 
+research institution. The United States and the England contribute 
+greatly to the development of the cooperation network. Cooperation among
+ research institutions appears to be suboptimal, and strengthening 
+cooperation could greatly beneﬁt this ﬁeld of research. The prediction 
+of air pollutant</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2022-9-7</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.3389/fpubh.2022.933665">10.3389/fpubh.2022.933665</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://www.frontiersin.org/articles/10.3389/fpubh.2022.933665/full">https://www.frontiersin.org/articles/10.3389/fpubh.2022.933665/full</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>03/04/2026 00:56:00</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Applications of artificial intelligence in the field of air pollution</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>10</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>933665</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Frontiers in Public Health</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>2296-2565</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Front. Public Health</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>03/04/2026 00:56:00</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>03/04/2026 01:06:14</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Artificial intelligence</li>
+					<li>Physics-based modeling</li>
+					<li>Pollution</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_8GPV3CVU">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_VMUTYU4P" class="item journalArticle">
+			<h2>Combining physics-based and data-driven models: advancing the frontiers of research with scientific machine learning</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Alfio Quarteroni</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Paola Gervasio</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Francesco Regazzoni</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Scientific Machine Learning (SciML) is a recently emerged 
+research field which combines physics–based and data–driven models for 
+the numerical approximation of differential problems. Physics–based 
+models rely on the physical understanding of the problem at hand, 
+subsequent mathematical formulation, and numerical approximation. 
+Data–driven models instead aim to extract relations between input and 
+output data without arguing any causality principle underlining the 
+available data distribution. In recent years, data–driven models have 
+been rapidly developed and popularized. Such a diffusion has been 
+triggered by a huge availability of data (the so–called big data), an 
+increasingly cheap computing power, and the development of powerful 
+machine learning algorithms. SciML leverages the physical awareness of 
+physics–based models and, at the same time, the efficiency of 
+data–driven algorithms. With SciML, we can inject physics and 
+mathematical knowledge into machine learning algorithms. Yet, we can 
+rely on data–driven algorithms’ capability to discover complex and 
+non–linear patterns from data and improve the descriptive capacity of 
+physics–based models. After recalling the mathematical foundations of 
+digital modelling and machine learning algorithms, and presenting the 
+most popular machine learning architectures, we discuss the great 
+potential of a broad variety of SciML strategies in solving complex 
+problems governed by partial differential equations. Finally, we 
+illustrate the successful application of SciML to the simulation of the 
+human cardiac function, a field of significant socio–economic importance
+ that poses numerous challenges on both the mathematical and 
+computational fronts. The corresponding mathematical model is a complex 
+system of non–linear ordinary and partial differential equations 
+describing the electromechanics, valve dynamics, blood circulation, 
+perfusion in the coronary tree, and torso potential. Despite the 
+robustness and accuracy of physics–based models, certain aspects, such 
+as unveiling constitutive laws for cardiac cells and myocardial material
+ properties, as well as devising efficient reduced order models to 
+dominate the extraordinary computational complexity, have been 
+successfully tackled by leveraging data–driven models.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>04/2025</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1142/S0218202525500125">10.1142/S0218202525500125</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://www.worldscientific.com/doi/10.1142/S0218202525500125">https://www.worldscientific.com/doi/10.1142/S0218202525500125</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>03/04/2026 00:55:25</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Combining physics-based and data-driven models</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>35</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>905-1071</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Mathematical Models and Methods in Applied Sciences</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>0218-2025, 1793-6314</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>04</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Math. Models Methods Appl. Sci.</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>03/04/2026 00:55:25</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>03/04/2026 01:06:43</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Artificial intelligence</li>
+					<li>Data-driven modeling</li>
+					<li>Physics-based modeling</li>
+					<li>PINN</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_SG2J8IN9">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_QJ6Z8B82" class="item journalArticle">
+			<h2>DeepONet: Learning nonlinear operators for identifying 
+differential equations based on the universal approximation theorem of 
+operators</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Lu Lu</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Pengzhan Jin</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>George Em Karniadakis</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>While it is widely known that neural networks are universal 
+approximators of continuous functions, a less known and perhaps more 
+powerful result is that a neural network with a single hidden layer can 
+approximate accurately any nonlinear continuous operator. This universal
+ approximation theorem is suggestive of the potential application of 
+neural networks in learning nonlinear operators from data. However, the 
+theorem guarantees only a small approximation error for a sufficient 
+large network, and does not consider the important optimization and 
+generalization errors. To realize this theorem in practice, we propose 
+deep operator networks (DeepONets) to learn operators accurately and 
+efficiently from a relatively small dataset. A DeepONet consists of two 
+sub-networks, one for encoding the input function at a fixed number of 
+sensors $x_i, i=1,\dots,m$ (branch net), and another for encoding the 
+locations for the output functions (trunk net). We perform systematic 
+simulations for identifying two types of operators, i.e., dynamic 
+systems and partial differential equations, and demonstrate that 
+DeepONet significantly reduces the generalization error compared to the 
+fully-connected networks. We also derive theoretically the dependence of
+ the approximation error in terms of the number of sensors (where the 
+input function is defined) as well as the input function type, and we 
+verify the theorem with computational results. More importantly, we 
+observe high-order error convergence in our computational tests, namely 
+polynomial rates (from half order to fourth order) and even exponential 
+convergence with respect to the training dataset size.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2021-03-18</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1038/s42256-021-00302-5">10.1038/s42256-021-00302-5</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/1910.03193">http://arxiv.org/abs/1910.03193</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>04/05/2026 17:54:19</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>DeepONet</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:1910.03193 [cs]</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>3</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>218-229</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Nature Machine Intelligence</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>2522-5839</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>3</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Nat Mach Intell</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>04/05/2026 17:54:19</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:04:00</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Computer Science - Machine Learning</li>
+					<li>DeepONet</li>
+					<li>Lu</li>
+					<li>Statistics - Machine Learning</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_WJ7EU23E">
+<div><div data-schema-version="9"><p>C’est une généralisation de Tucker POD</p>
+<p></p>
+</div></div>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_7ZAMV2K5">Preprint PDF					</li>
+					<li id="item_DR83PIL3">Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_Y7FMGN2R" class="item conferencePaper">
+			<h2>Empirical Comparison between Autoencoders and Traditional Dimensionality Reduction Methods</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de colloque</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Quentin Fournier</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Daniel Aloise</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>In order to process efficiently ever-higher dimensional data 
+such as images, sentences, or audio recordings, one needs to find a 
+proper way to reduce the dimensionality of such data. In this regard, 
+SVD-based methods including PCA and Isomap have been extensively used. 
+Recently, a neural network alternative called autoencoder has been 
+proposed and is often preferred for its higher flexibility. This work 
+aims to show that PCA is still a relevant technique for dimensionality 
+reduction in the context of classification. To this purpose, we 
+evaluated the performance of PCA compared to Isomap, a deep autoencoder,
+ and a variational autoencoder. Experiments were conducted on three 
+commonly used image datasets: MNIST, Fashion-MNIST, and CIFAR-10. The 
+four different dimensionality reduction techniques were separately 
+employed on each dataset to project data into a low-dimensional space. 
+Then a k-NN classifier was trained on each projection with a 
+cross-validated random search over the number of neighbours. 
+Interestingly, our experiments revealed that k-NN achieved comparable 
+accuracy on PCA and both autoencoders projections provided a big enough 
+dimension. However, PCA computation time was two orders of magnitude 
+faster than its neural network counterparts.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2019-06</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1109/AIKE.2019.00044">10.1109/AIKE.2019.00044</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://ieeexplore.ieee.org/abstract/document/8791727">https://ieeexplore.ieee.org/abstract/document/8791727</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>15/05/2026 18:58:31</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>IEEE Xplore</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>211-214</td>
+					</tr>
+					<tr>
+					<th>Titre des actes</th>
+						<td>2019 IEEE Second International Conference on Artificial Intelligence and Knowledge Engineering (AIKE)</td>
+					</tr>
+					<tr>
+					<th>Intitulé du colloque</th>
+						<td>2019 IEEE Second International Conference on Artificial Intelligence and Knowledge Engineering (AIKE)</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>15/05/2026 18:58:31</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>15/05/2026 18:58:31</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Audio recording</li>
+					<li>autoencoder</li>
+					<li>classification</li>
+					<li>Decoding</li>
+					<li>dimensionality reduction</li>
+					<li>Dimensionality reduction</li>
+					<li>k-NN</li>
+					<li>Machine learning</li>
+					<li>Neural networks</li>
+					<li>PCA</li>
+					<li>performance</li>
+					<li>Principal component analysis</li>
+					<li>Standards</li>
+					<li>Training</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_JLBSAGFZ">Snapshot					</li>
+					<li id="item_GUPPKFV6">Version soumise					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_JUU6VSIT" class="item journalArticle">
+			<h2>Fourier neural networks as function approximators and differential equation solvers</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Marieme Ngom</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Oana Marin</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>We present a Fourier neural network (FNN) that can be mapped 
+directly to the Fourier decomposition. The choice of activation and loss
+ function yields results that replicate a Fourier series expansion 
+closely while preserving a straightforward architecture with a single 
+hidden layer. The simplicity of this network architecture facilitates 
+the integration with any other higher-complexity networks, at a data 
+pre- or postprocessing stage. We validate this FNN on naturally periodic
+ smooth functions and on piecewise continuous periodic functions. We 
+showcase the use of this FNN for modeling or solving partial 
+differential equations with periodic boundary conditions. The main 
+advantages of the current approach are the validity of the solution 
+outside the training region, interpretability of the trained model, and 
+simplicity of use.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>12/2021</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1002/sam.11531">10.1002/sam.11531</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://onlinelibrary.wiley.com/doi/10.1002/sam.11531">https://onlinelibrary.wiley.com/doi/10.1002/sam.11531</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>05/05/2026 11:05:59</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>14</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>647-661</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Statistical Analysis and Data Mining: The ASA Data Science Journal</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>1932-1864, 1932-1872</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>6</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Statistical Analysis</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>05/05/2026 11:05:59</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:06:40</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Lu</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_HQYCENSA">
+<div><div data-schema-version="9"><p>C’est un reseau simple, juste les activations ca fait fourier à la fin.</p>
+</div></div>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_DTQFXJZU">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_RXFJLBWA" class="item preprint">
+			<h2>Fourier Neural Operator for Parametric Partial Differential Equations</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Zongyi Li</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Nikola Kovachki</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Kamyar Azizzadenesheli</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Burigede Liu</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Kaushik Bhattacharya</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Andrew Stuart</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Anima Anandkumar</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>The classical development of neural networks has primarily 
+focused on learning mappings between finite-dimensional Euclidean 
+spaces. Recently, this has been generalized to neural operators that 
+learn mappings between function spaces. For partial differential 
+equations (PDEs), neural operators directly learn the mapping from any 
+functional parametric dependence to the solution. Thus, they learn an 
+entire family of PDEs, in contrast to classical methods which solve one 
+instance of the equation. In this work, we formulate a new neural 
+operator by parameterizing the integral kernel directly in Fourier 
+space, allowing for an expressive and efficient architecture. We perform
+ experiments on Burgers' equation, Darcy flow, and Navier-Stokes 
+equation. The Fourier neural operator is the first ML-based method to 
+successfully model turbulent flows with zero-shot super-resolution. It 
+is up to three orders of magnitude faster compared to traditional PDE 
+solvers. Additionally, it achieves superior accuracy compared to 
+previous learning-based solvers under fixed resolution.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2021-05-17</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/arXiv.2010.08895">10.48550/arXiv.2010.08895</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/2010.08895">http://arxiv.org/abs/2010.08895</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>29/04/2026 10:44:03</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:2010.08895 [cs]</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Identifiant dans l'archive</th>
+						<td>arXiv:2010.08895</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>29/04/2026 10:44:03</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:04:51</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Computer Science - Machine Learning</li>
+					<li>Lu</li>
+					<li>Mathematics - Numerical Analysis</li>
+					<li>Neural Operator</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_U8VCGUK5">
+<div><div data-schema-version="9"><p>Ici opéraeur K = convolution avec une fonction périodique de la transformée de fourier, puis transformée inverse :)</p>
+</div></div>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_XA8JMPWZ">Full Text PDF					</li>
+					<li id="item_ZSDICAU7">Snapshot					</li>
+				</ul>
+				<h3 class="related">Connexe</h3>
+				<ul class="related">
+					<li id="item_8LTM4FF3">PDF</li>
+					<li id="item_HTSZMUIX">Fourier-DeepONet: Fourier-enhanced deep 
+operator networks for full waveform inversion with improved accuracy, 
+generalizability, and robustness</li>
+					<li id="item_SRPJRBTL">LNO: Laplace Neural Operator for Solving Differential Equations</li>
+					<li id="item_TJFRCX4I">Neural Operator: Learning Maps Between Function Spaces</li>
+				</ul>
+			</li>
+
+
+			<li id="item_HTSZMUIX" class="item journalArticle">
+			<h2>Fourier-DeepONet: Fourier-enhanced deep operator networks for 
+full waveform inversion with improved accuracy, generalizability, and 
+robustness</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Min Zhu</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Shihang Feng</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Youzuo Lin</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Lu Lu</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Full waveform inversion (FWI) infers the subsurface structure 
+information from seismic waveform data by solving a non-convex 
+optimization problem. Data-driven FWI has been increasingly studied with
+ various neural network architectures to improve accuracy and 
+computational efficiency. Nevertheless, the applicability of pre-trained
+ neural networks is severely restricted by potential discrepancies 
+between the source function used in the field survey and the one 
+utilized during training. Here, we develop a Fourier-enhanced deep 
+operator network (Fourier-DeepONet) for FWI with the generalization of 
+seismic sources, including the frequencies and locations of sources. 
+Specifically, we employ the Fourier neural operator as the decoder of 
+DeepONet, and we utilize source parameters as one input of 
+Fourier-DeepONet, facilitating the resolution of FWI with variable 
+sources. To test Fourier-DeepONet, we develop three new and realistic 
+FWI benchmark datasets (FWI-F, FWI-L, and FWI-FL) with varying source 
+frequencies, locations, or both. Our experiments demonstrate that 
+compared with existing data-driven FWI methods, Fourier-DeepONet obtains
+ more accurate predictions of subsurface structures in a wide range of 
+source parameters. Moreover, the proposed Fourier-DeepONet exhibits 
+superior robustness when handling data with Gaussian noise or missing 
+traces and sources with Gaussian noise, paving the way for more reliable
+ and accurate subsurface imaging across diverse real conditions.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>11/2023</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1016/j.cma.2023.116300">10.1016/j.cma.2023.116300</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://linkinghub.elsevier.com/retrieve/pii/S0045782523004243">https://linkinghub.elsevier.com/retrieve/pii/S0045782523004243</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>29/04/2026 11:14:04</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Fourier-DeepONet</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>416</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>116300</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Computer Methods in Applied Mechanics and Engineering</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>00457825</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Computer Methods in Applied Mechanics and Engineering</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>29/04/2026 11:14:04</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:04:34</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>DeepONet</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_ZX85SKYU">
+<div><div data-citation-items="%5B%7B%22uris%22%3A%5B%22http%3A%2F%2Fzotero.org%2Fusers%2F20136011%2Fitems%2FHTSZMUIX%22%5D%2C%22itemData%22%3A%7B%22id%22%3A%22http%3A%2F%2Fzotero.org%2Fusers%2F20136011%2Fitems%2FHTSZMUIX%22%2C%22type%22%3A%22article-journal%22%2C%22abstract%22%3A%22Full%20waveform%20inversion%20(FWI)%20infers%20the%20subsurface%20structure%20information%20from%20seismic%20waveform%20data%20by%20solving%20a%20non-convex%20optimization%20problem.%20Data-driven%20FWI%20has%20been%20increasingly%20studied%20with%20various%20neural%20network%20architectures%20to%20improve%20accuracy%20and%20computational%20efficiency.%20Nevertheless%2C%20the%20applicability%20of%20pre-trained%20neural%20networks%20is%20severely%20restricted%20by%20potential%20discrepancies%20between%20the%20source%20function%20used%20in%20the%20field%20survey%20and%20the%20one%20utilized%20during%20training.%20Here%2C%20we%20develop%20a%20Fourier-enhanced%20deep%20operator%20network%20(Fourier-DeepONet)%20for%20FWI%20with%20the%20generalization%20of%20seismic%20sources%2C%20including%20the%20frequencies%20and%20locations%20of%20sources.%20Specifically%2C%20we%20employ%20the%20Fourier%20neural%20operator%20as%20the%20decoder%20of%20DeepONet%2C%20and%20we%20utilize%20source%20parameters%20as%20one%20input%20of%20Fourier-DeepONet%2C%20facilitating%20the%20resolution%20of%20FWI%20with%20variable%20sources.%20To%20test%20Fourier-DeepONet%2C%20we%20develop%20three%20new%20and%20realistic%20FWI%20benchmark%20datasets%20(FWI-F%2C%20FWI-L%2C%20and%20FWI-FL)%20with%20varying%20source%20frequencies%2C%20locations%2C%20or%20both.%20Our%20experiments%20demonstrate%20that%20compared%20with%20existing%20data-driven%20FWI%20methods%2C%20Fourier-DeepONet%20obtains%20more%20accurate%20predictions%20of%20subsurface%20structures%20in%20a%20wide%20range%20of%20source%20parameters.%20Moreover%2C%20the%20proposed%20Fourier-DeepONet%20exhibits%20superior%20robustness%20when%20handling%20data%20with%20Gaussian%20noise%20or%20missing%20traces%20and%20sources%20with%20Gaussian%20noise%2C%20paving%20the%20way%20for%20more%20reliable%20and%20accurate%20subsurface%20imaging%20across%20diverse%20real%20conditions.%22%2C%22container-title%22%3A%22Computer%20Methods%20in%20Applied%20Mechanics%20and%20Engineering%22%2C%22DOI%22%3A%2210.1016%2Fj.cma.2023.116300%22%2C%22ISSN%22%3A%2200457825%22%2C%22journalAbbreviation%22%3A%22Computer%20Methods%20in%20Applied%20Mechanics%20and%20Engineering%22%2C%22language%22%3A%22en%22%2C%22page%22%3A%22116300%22%2C%22source%22%3A%22DOI.org%20(Crossref)%22%2C%22title%22%3A%22Fourier-DeepONet%3A%20Fourier-enhanced%20deep%20operator%20networks%20for%20full%20waveform%20inversion%20with%20improved%20accuracy%2C%20generalizability%2C%20and%20robustness%22%2C%22title-short%22%3A%22Fourier-DeepONet%22%2C%22URL%22%3A%22https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0045782523004243%22%2C%22volume%22%3A%22416%22%2C%22author%22%3A%5B%7B%22family%22%3A%22Zhu%22%2C%22given%22%3A%22Min%22%7D%2C%7B%22family%22%3A%22Feng%22%2C%22given%22%3A%22Shihang%22%7D%2C%7B%22family%22%3A%22Lin%22%2C%22given%22%3A%22Youzuo%22%7D%2C%7B%22family%22%3A%22Lu%22%2C%22given%22%3A%22Lu%22%7D%5D%2C%22accessed%22%3A%7B%22date-parts%22%3A%5B%5B%222026%22%2C4%2C29%5D%5D%7D%2C%22issued%22%3A%7B%22date-parts%22%3A%5B%5B%222023%22%2C11%5D%5D%7D%7D%7D%5D" data-schema-version="9"><p>C’est pas clair si c’est relié à ce que je fais</p>
+<p>Full Waveform Inversion (FWI) is <strong>a high-resolution seismic 
+imaging technique that uses the entire seismic waveform—amplitudes and 
+phases—to create detailed velocity models of the subsurface</strong></p>
+</div></div>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_JWUB74LP">PDF					</li>
+				</ul>
+				<h3 class="related">Connexe</h3>
+				<ul class="related">
+					<li id="item_8LTM4FF3">PDF</li>
+					<li id="item_RXFJLBWA">Fourier Neural Operator for Parametric Partial Differential Equations</li>
+				</ul>
+			</li>
+
+
+			<li id="item_SRPJRBTL" class="item preprint">
+			<h2>LNO: Laplace Neural Operator for Solving Differential Equations</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Qianying Cao</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Somdatta Goswami</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>George Em Karniadakis</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>We introduce the Laplace neural operator (LNO), which 
+leverages the Laplace transform to decompose the input space. Unlike the
+ Fourier Neural Operator (FNO), LNO can handle non-periodic signals, 
+account for transient responses, and exhibit exponential convergence. 
+LNO incorporates the pole-residue relationship between the input and the
+ output space, enabling greater interpretability and improved 
+generalization ability. Herein, we demonstrate the superior 
+approximation accuracy of a single Laplace layer in LNO over four 
+Fourier modules in FNO in approximating the solutions of three ODEs 
+(Duffing oscillator, driven gravity pendulum, and Lorenz system) and 
+three PDEs (Euler-Bernoulli beam, diffusion equation, and 
+reaction-diffusion system). Notably, LNO outperforms FNO in capturing 
+transient responses in undamped scenarios. For the linear 
+Euler-Bernoulli beam and diffusion equation, LNO's exact representation 
+of the pole-residue formulation yields significantly better results than
+ FNO. For the nonlinear reaction-diffusion system, LNO's errors are 
+smaller than those of FNO, demonstrating the effectiveness of using 
+system poles and residues as network parameters for operator learning. 
+Overall, our results suggest that LNO represents a promising new 
+approach for learning neural operators that map functions between 
+infinite-dimensional spaces.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2023-05-30</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/arXiv.2303.10528">10.48550/arXiv.2303.10528</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/2303.10528">http://arxiv.org/abs/2303.10528</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>30/04/2026 11:37:12</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>LNO</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:2303.10528 [cs]</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Identifiant dans l'archive</th>
+						<td>arXiv:2303.10528</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>30/04/2026 11:37:12</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:03:25</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Artificial intelligence</li>
+					<li>Computer Science - Machine Learning</li>
+					<li>Laplace</li>
+					<li>Lu</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_Z3CMUSCJ">
+<div><div data-schema-version="9"><p>Par rapport à FNO : états transitoires.</p>
+<p>Utilise la transformée de laplace</p>
+<p>Quels point s --&gt; tous</p>
+<p>Ils apprennent vraiment la fonction de laplace, sous forme d’une 
+somme poles + résidus (on sait que c’est comme ça qu’on peut espérer 
+trouver laplace)<br></p>
+</div></div>
+					</li>
+					<li id="item_8Q5YQVC5">
+<p class="plaintext"></p>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_S87ST8EI">Full Text PDF					</li>
+					<li id="item_ARR8D2DB">Snapshot					</li>
+				</ul>
+				<h3 class="related">Connexe</h3>
+				<ul class="related">
+					<li id="item_P7MFQG3Z">Physics-Informed Laplace Neural Operator for Solving Partial Differential Equations</li>
+					<li id="item_RXFJLBWA">Fourier Neural Operator for Parametric Partial Differential Equations</li>
+					<li id="item_TJFRCX4I">Neural Operator: Learning Maps Between Function Spaces</li>
+				</ul>
+			</li>
+
+
+			<li id="item_JEVYZ3GH" class="item webpage">
+			<h2>Model Order Reduction in Contour Integral Methods for Parametric PDEs</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Page Web</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1137/22M1520189">10.1137/22M1520189</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://epubs.siam.org/doi/epdf/10.1137/22M1520189">https://epubs.siam.org/doi/epdf/10.1137/22M1520189</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>13/05/2026 19:02:43</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>DOI: 10.1137/22M1520189</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>13/05/2026 19:02:43</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>20/05/2026 11:45:46</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Laplace</li>
+					<li>Lu</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_E3B8Y64P">22m1520189					</li>
+					<li id="item_NT7HF3J5">PDF					</li>
+					<li id="item_LZP65HIY">Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_6V37GFQ9" class="item bookSection">
+			<h2>Model Order Reduction in Fluid Dynamics: Challenges and Perspectives</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Chapitre de livre</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Alfio Quarteroni</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Gianluigi Rozza</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Toni Lassila</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Andrea Manzoni</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Alfio Quarteroni</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Gianluigi Rozza</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>This chapter reviews techniques of model reduction of ﬂuid 
+dynamics systems. Fluid systems are known to be difﬁcult to reduce 
+efﬁciently due to several reasons. First of all, they exhibit strong 
+nonlinearities – which are mainly related either to nonlinear convection
+ terms and/or some geometric variability – that often cannot be treated 
+by simple linearization. Additional difﬁculties arise when attempting 
+model reduction of unsteady ﬂows, especially when long-term transient 
+behavior needs to be accurately predicted using reduced order models and
+ more complex features, such as turbulence or multiphysics phenomena, 
+have to be taken into consideration. We ﬁrst discuss some general 
+principles that apply to many parametric model order reduction problems,
+ then we apply them on steady and unsteady viscous ﬂows modelled by the 
+incompressible Navier-Stokes equations. We address questions of inf-sup 
+stability, certiﬁcation through error estimation, computational issues 
+and – in the unsteady case – long-time stability of the reduced model. 
+Moreover, we provide an extensive list of literature references.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2014</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1007/978-3-319-02090-7_9">10.1007/978-3-319-02090-7_9</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://link.springer.com/10.1007/978-3-319-02090-7_9">http://link.springer.com/10.1007/978-3-319-02090-7_9</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>20/05/2026 11:36:49</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Model Order Reduction in Fluid Dynamics</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Maison d’édition</th>
+						<td>Springer International Publishing</td>
+					</tr>
+					<tr>
+					<th>Lieu</th>
+						<td>Cham</td>
+					</tr>
+					<tr>
+					<th>ISBN</th>
+						<td>978-3-319-02089-1 978-3-319-02090-7</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>235-273</td>
+					</tr>
+					<tr>
+					<th>Titre du livre</th>
+						<td>Reduced Order Methods for Modeling and Computational Reduction</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>20/05/2026 11:36:49</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>20/05/2026 11:45:00</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_E7RLXTP6">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_X6269R5F" class="item conferencePaper">
+			<h2>Neural Laplace: Learning diverse classes of differential equations in the Laplace domain</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de colloque</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Samuel I. Holt</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Zhaozhi Qian</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Mihaela van der Schaar</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Neural Ordinary Differential Equations model dynamical systems
+ with ODEs learned by neural networks. However, ODEs are fundamentally 
+inadequate to model systems with long-range dependencies or 
+discontinuities, which are common in engineering and biological systems.
+ Broader classes of differential equations (DE) have been proposed as 
+remedies, including delay differential equations and 
+integro-differential equations. Furthermore, Neural ODE suffers from 
+numerical instability when modelling stiff ODEs and ODEs with piecewise 
+forcing functions. In this work, we propose Neural Laplace, a unifying 
+framework for learning diverse classes of DEs including all the 
+aforementioned ones. Instead of modelling the dynamics in the time 
+domain, we model it in the Laplace domain, where the 
+history-dependencies and discontinuities in time can be represented as 
+summations of complex exponentials. To make learning more efficient, we 
+use the geometrical stereographic map of a Riemann sphere to induce more
+ smoothness in the Laplace domain. In the experiments, Neural Laplace 
+shows superior performance in modelling and extrapolating the 
+trajectories of diverse classes of DEs, including the ones with complex 
+history dependency and abrupt changes.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2022-06-28</td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://proceedings.mlr.press/v162/holt22a.html">https://proceedings.mlr.press/v162/holt22a.html</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>06/05/2026 15:24:55</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Neural Laplace</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>proceedings.mlr.press</td>
+					</tr>
+					<tr>
+					<th>Maison d’édition</th>
+						<td>PMLR</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>8811-8832</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>2640-3498</td>
+					</tr>
+					<tr>
+					<th>Titre des actes</th>
+						<td>Proceedings of the 39th International Conference on Machine Learning</td>
+					</tr>
+					<tr>
+					<th>Intitulé du colloque</th>
+						<td>International Conference on Machine Learning</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>06/05/2026 15:24:55</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>07/05/2026 15:09:21</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_CNBXTYZ5">Full Text PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_BH59ZLAQ" class="item journalArticle">
+			<h2>Numerical inverse Laplace transform for convection-diffusion equations</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Nicola Guglielmi</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>María López-Fernández</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Giancarlo Nino</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>In this paper a novel contour integral method is proposed for 
+linear convection-diﬀusion equations. The method is based on the 
+inversion of the Laplace transform and makes use of a contour given by 
+an elliptic arc joined symmetrically to two half-lines. The trapezoidal 
+rule is the chosen integration method for the numerical inversion of the
+ Laplace transform, due to its well-known fast convergence properties 
+when applied to analytic functions. Error estimates are provided as well
+ as careful indications about the choice of several involved parameters.
+ The method selects the elliptic arc in the integration contour by an 
+algorithmic strategy based on the computation of pseudospectral level 
+sets of the discretized diﬀerential operator. In this sense the method 
+is general and can be applied to any linear convection-diﬀusion equation
+ without knowing any a priori information about its pseudospectral 
+geometry. Numerical experiments performed on the Black–Scholes (1D) and 
+Heston (2D) equations show that the method is competitive with other 
+contour integral methods available in the literature.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2020-1-6</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1090/mcom/3497">10.1090/mcom/3497</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://www.ams.org/mcom/2020-89-323/S0025-5718-2020-03497-8/">https://www.ams.org/mcom/2020-89-323/S0025-5718-2020-03497-8/</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>15/05/2026 15:36:01</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Licence</th>
+						<td>https://www.ams.org/publications/copyright-and-permissions</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>89</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>1161-1191</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Mathematics of Computation</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>1088-6842, 0025-5718</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>323</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Math. Comp.</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>15/05/2026 15:36:01</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>15/05/2026 18:39:10</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>laplace</li>
+					<li>Survolé</li>
+				</ul>
+				<h3 class="notes">Notes :</h3>
+				<ul class="notes">
+					<li id="item_M3Y54ZL9">
+<div><div data-schema-version="9"><p>méthode dans le cas ou on connait l’opérateur (pas nous, ou pas bien) et A constant --&gt; on fait alors un calcul explicite </p>
+</div></div>
+					</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_QU8K8YDM">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_E8BMZJIR" class="item journalArticle">
+			<h2>Offline Meteorology-Pollution Coupling Global Air Pollution Forecasting Model with Bilinear Pooling</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Xu Fan</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Yuetan Lin</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Bing Gong</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Hao Li</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Air pollution has become a major threat to human health, 
+making accurate forecasting crucial for pollution control. Traditional 
+physics-based models forecast global air pollution by coupling 
+meteorology and pollution processes, using either online or offline 
+methods depending on whether fully integrated with meteorological models
+ and run simultaneously. However, the high computational demands of both
+ methods severely limit real-time prediction efficiency. Existing deep 
+learning (DL) solutions employ online coupling strategies for global air
+ pollution forecasting, which finetune pollution forecasting based on 
+pretrained atmospheric models, requiring substantial training resources.
+ This study pioneers a DL-based offline coupling framework that utilizes
+ bilinear pooling to achieve offline coupling between meteorological 
+fields and pollutants. The proposed model requires only 13% of the 
+parameters of DL-based online coupling models while achieving 
+competitive performance. Compared with the state-of-the-art global air 
+pollution forecasting model CAMS, our approach demonstrates superiority 
+in 63% variables across all forecast time steps and 85% variables in 
+predictions exceeding 48 hours. This work pioneers experimental 
+validation of the effectiveness of meteorological fields in DL-based 
+global air pollution forecasting, demonstrating that offline coupling 
+meteorological fields with pollutants can achieve a 15% relative 
+reduction in RMSE across all pollution variables. The research 
+establishes a new paradigm for real-time global air pollution warning 
+systems and delivers critical technical support for developing more 
+efficient and comprehensive AI-powered global atmospheric forecasting 
+frameworks.</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>Zotero</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>03/04/2026 00:55:57</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>03/04/2026 01:06:56</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Pollution</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_MK4F5KNS">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_QVA8UTBA" class="item preprint">
+			<h2>Parameter conditioned interpretable U-Net surrogate model for data-driven predictions of convection-diffusion-reaction processes</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Michael Urs Lars Kastor</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Jan Rottmayer</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Anna Hundertmark</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Nicolas Ralph Gauger</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>We present a combined numerical and data-driven workflow for 
+efficient prediction of nonlinear, instationary 
+convection-diffusion-reaction dynamics on a two-dimensional phenotypic 
+domain, motivated by macroscopic modeling of cancer cell plasticity. A 
+finite-difference solver, implemented in C++, is developed using 
+second-order spatial discretizations and a step-size controlled 
+Runge-Kutta time integrator. A mesh refinement study confirms the 
+second-order convergence for the spatial discretizations error. Based on
+ simulated input-output pairs and corresponding parameterizations for 
+the diffusion, advection, and reaction mechanisms, we train a 
+parameter-conditioned U-Net surrogate to approximate the fixed-horizon 
+solution map. The surrogate incorporates Feature-wise Linear Modulation 
+(FiLM) for parameter conditioning, coordinate encoding to incorporate 
+spatial location information, and residual blocks to enable multiscale 
+representation learning in combination with the U-Nets skip connections.
+ The trained model achieves low prediction error on held-out test data 
+and provides favorable prediction times due to the GPU based 
+parallelization. Generalization is analyzed using a factorial test 
+dataset, separating initial conditions from parameter conditioning. The 
+results reveal that approximation difficulty varies primarily with the 
+conditioning vector (i.e., the induced PDE regime), rather than with the
+ initial conditions.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2026-01-30</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/arXiv.2601.22654">10.48550/arXiv.2601.22654</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/2601.22654">http://arxiv.org/abs/2601.22654</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>06/05/2026 10:20:30</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:2601.22654 [cs]</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Identifiant dans l'archive</th>
+						<td>arXiv:2601.22654</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>06/05/2026 10:20:30</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>06/05/2026 10:20:33</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Computer Science - Computational Engineering, Finance, and Science</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_DAEZDF9P">Full Text PDF					</li>
+					<li id="item_FRT2CVTN">Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_BY74RZHY" class="item journalArticle">
+			<h2>POD-DL-ROM: Enhancing deep learning-based reduced order models 
+for nonlinear parametrized PDEs by proper orthogonal decomposition</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Stefania Fresca</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Andrea Manzoni</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Deep learning-based reduced order models (DL-ROMs) have been 
+recently proposed to overcome common limitations shared by conventional 
+reduced order models (ROMs) – built, e.g., through proper orthogonal 
+decomposition (POD) – when applied to nonlinear time-dependent 
+parametrized partial differential equations (PDEs). These might be 
+related to (i) the need to deal with projections onto high dimensional 
+linear approximating trial manifolds, (ii) expensive hyper-reduction 
+strategies, or (iii) the intrinsic difficulty to handle physical 
+complexity with a linear superimposition of modes. All these aspects are
+ avoided when employing DL-ROMs, which learn in a non-intrusive way both
+ the nonlinear trial manifold and the reduced dynamics, by relying on 
+deep (e.g., feedforward, convolutional, autoencoder) neural networks. 
+Although extremely efficient at testing time, when evaluating the PDE 
+solution for any new testing-parameter instance, DL-ROMs require an 
+expensive training stage, because of the extremely large number of 
+network parameters to be estimated. In this paper we propose a possible 
+way to avoid an expensive training stage of DL-ROMs, by (i) performing a
+ prior dimensionality reduction through POD, and (ii) relying on a 
+multi-fidelity pretraining stage, where different physical models can be
+ efficiently combined. The proposed POD-DL-ROM is tested on several 
+(both scalar and vector, linear and nonlinear) time-dependent 
+parametrized PDEs (such as, e.g., linear advection–diffusion–reaction, 
+nonlinear diffusion–reaction, nonlinear elastodynamics, and 
+Navier–Stokes equations) to show the generality of this approach and its
+ remarkable computational savings.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2022-01-01</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1016/j.cma.2021.114181">10.1016/j.cma.2021.114181</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://www.sciencedirect.com/science/article/pii/S0045782521005120">https://www.sciencedirect.com/science/article/pii/S0045782521005120</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>12/05/2026 14:13:36</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>POD-DL-ROM</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>ScienceDirect</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>388</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>114181</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Computer Methods in Applied Mechanics and Engineering</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>0045-7825</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Computer Methods in Applied Mechanics and Engineering</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>12/05/2026 14:13:36</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>15/05/2026 18:55:11</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Deep learning</li>
+					<li>Dimensionality reduction</li>
+					<li>Parametrized PDEs</li>
+					<li>Proper orthogonal decomposition</li>
+					<li>Reduced order modeling</li>
+					<li>Survolé</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_8NU9W897">ScienceDirect Full Text PDF					</li>
+					<li id="item_X938KXM9">ScienceDirect Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_AEIE2ILP" class="item preprint">
+			<h2>Rank Reduction Autoencoders</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Jad Mounayer</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Sebastian Rodriguez</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Chady Ghnatios</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Charbel Farhat</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Francisco Chinesta</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>The choice of an appropriate bottleneck dimension and the 
+application of effective regularization are both essential for 
+Autoencoders to learn meaningful representations from unlabeled data. In
+ this paper, we introduce a new class of deterministic autoencoders, 
+Rank Reduction Autoencoders (RRAEs), which regularize their latent 
+spaces by employing a truncated singular value decomposition (SVD) 
+during training. In RRAEs, the bottleneck is defined by the rank of the 
+latent matrix, thereby alleviating the dependence of the encoder/decoder
+ architecture on the bottleneck size. This approach enabled us to 
+propose an adaptive algorithm (aRRAEs) that efficiently determines the 
+optimal bottleneck size during training. We empirically demonstrate that
+ both RRAEs and aRRAEs are stable, scalable, and reliable, as they do 
+not introduce any additional training hyperparameters. We evaluate our 
+proposed architecture on a synthetic data set, as well as on MNIST, 
+Fashion MNIST, and CelebA. Our results show that RRAEs offer several 
+advantages over Vanilla AEs with both large and small latent spaces, and
+ outperform other regularizing AE architectures.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2025-03-25</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/arXiv.2405.13980">10.48550/arXiv.2405.13980</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/2405.13980">http://arxiv.org/abs/2405.13980</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>19/05/2026 13:29:46</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:2405.13980 [cs.LG]</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Identifiant dans l'archive</th>
+						<td>arXiv:2405.13980</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>19/05/2026 13:29:46</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>19/05/2026 13:29:46</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>Computer Science - Machine Learning</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_BXFRI5I6">Full Text PDF					</li>
+					<li id="item_KGZLF3EM">Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_EGG3GR79" class="item journalArticle">
+			<h2>Residual-Based Stabilized Reduced-Order Models of the Transient 
+Convection–Diffusion–Reaction Equation Obtained Through Discrete and 
+Continuous Projection</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Article de revue</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Eric Parish</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Masayuki Yano</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Irina Tezaur</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Traian Iliescu</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Galerkin and Petrov–Galerkin projection-based reduced-order 
+models (ROMs) of transient partial differential equations are typically 
+obtained by performing a dimension reduction and projection process that
+ is defined at either the spatially continuous or spatially discrete 
+level. In both cases, it is common to add stabilization to the resulting
+ ROM to increase the stability and accuracy of the method; the addition 
+of stabilization is particularly common for convection-dominated systems
+ when the ROM is under-resolved. While continuous and discrete 
+approaches can be equivalent in certain settings, a plethora of 
+different techniques have emerged for each approach. However, to the 
+best of our knowledge, a thorough comparison of these techniques is 
+currently missing. In this work, we take a first, foundational step and 
+provide an in-depth review of seven commonly used residual-based ROM 
+stabilization strategies within the setting of finite element method 
+(FEM) discretizations using the convection-dominated 
+convection–diffusion–reaction (CDR) equation, an established testbed for
+ stabilization methods. We present the formulations in a unified 
+setting, highlight connections between the strategies, and numerically 
+assess the strategies. In the spatially continuous case, we examine the 
+Galerkin, streamline upwind Petrov–Galerkin (SUPG), Galerkin/ 
+least-squares (GLS), and adjoint (ADJ) stabilization methods. For the 
+GLS and ADJ methods, we examine formulations constructed from both the 
+“discretize-then-stabilize” technique and the space–time technique. In 
+the spatially discrete case, we examine the Galerkin, least-squares 
+Petrov–Galerkin (LSPG), and adjoint Petrov–Galerkin (APG) methods. We 
+summarize existing analyses for these methods and provide numerical 
+experiments, comparing competing methods for the first time in the 
+literature and assessing the impact of stabilization parameters and time
+ step sizes. Our numerical experiments demonstrate that residual-based 
+stabilized methods developed via continuous and discrete processes yield
+ substantial improvements over standard Galerkin methods when the 
+underlying FEM model is under-resolved. We find that SUPG, space–time 
+GLS, and space–time ADJ are the best continuous stabilization techniques
+ considered. For discrete ROMs, we find that APG is more accurate than 
+LSPG at the expense of a smaller region of stability with respect to the
+ stabilization parameter. The combination of an APG ROM constructed on 
+top of a SUPG FEM is the overall best performing method. The review, 
+discussion, and numerical inter-comparison of the seven stabilizations 
+strategies using the CDR equations serves as a stepping stone toward a 
+comprehensive investigation and further development of stabilization 
+methods for more challenging problems.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>04/2025</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1007/s11831-024-10197-1">10.1007/s11831-024-10197-1</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://link.springer.com/10.1007/s11831-024-10197-1">https://link.springer.com/10.1007/s11831-024-10197-1</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>20/05/2026 11:36:43</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>32</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>1885-1929</td>
+					</tr>
+					<tr>
+					<th>Publication</th>
+						<td>Archives of Computational Methods in Engineering</td>
+					</tr>
+					<tr>
+					<th>ISSN</th>
+						<td>1134-3060, 1886-1784</td>
+					</tr>
+					<tr>
+					<th>Numéro</th>
+						<td>3</td>
+					</tr>
+					<tr>
+					<th>Abrév. de revue</th>
+						<td>Arch Computat Methods Eng</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>20/05/2026 11:36:43</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>20/05/2026 11:45:15</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_7FAIMHWP">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_HUBCKW98" class="item preprint">
+			<h2>Surrogates for Physics-based and Data-driven Modelling of Parametric Systems: Review and New Perspectives</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Matteo Giacomini</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Pedro Díez</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>Surrogate models provide compact relations between 
+user-defined input parameters and output quantities of interest, 
+enabling the efficient evaluation of complex parametric systems in 
+many-query settings. Such capabilities are essential in a wide range of 
+applications, including optimisation, control, data assimilation, 
+uncertainty quantification, and emerging digital twin technologies in 
+various fields such as manufacturing, personalised healthcare, smart 
+cities, and sustainability. This article reviews established 
+methodologies for constructing surrogate models exploiting either 
+knowledge of the governing laws and the dynamical structure of the 
+system (physics-based) or experimental observations (data-driven), as 
+well as hybrid approaches combining these two paradigms. By revisiting 
+the design of a surrogate model as a functional approximation problem, 
+existing methodologies are reviewed in terms of the choice of (i) a 
+reduced basis and (ii) a suitable approximation criterion. The paper 
+reviews methodologies pertaining to the field of Scientific Machine 
+Learning, and it aims at synthesising established knowledge, recent 
+advances, and new perspectives on: dimensionality reduction, 
+physics-based, and data-driven surrogate modelling based on proper 
+orthogonal decomposition, proper generalised decomposition, and 
+artificial neural networks; multi-fidelity methods to exploit 
+information from sources with different fidelities; adaptive sampling, 
+enrichment, and data augmentation techniques to enhance the quality of 
+surrogate models.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2026-03-13</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/arXiv.2603.12870">10.48550/arXiv.2603.12870</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://arxiv.org/abs/2603.12870">http://arxiv.org/abs/2603.12870</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>21/05/2026 12:20:01</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>Surrogates for Physics-based and Data-driven Modelling of Parametric Systems</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>arXiv.org</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>arXiv:2603.12870 [math.NA]</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Identifiant dans l'archive</th>
+						<td>arXiv:2603.12870</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>21/05/2026 12:20:01</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>21/05/2026 12:20:17</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+					<li>Computer Science - Computational Engineering, Finance, and Science</li>
+					<li>Computer Science - Machine Learning</li>
+					<li>Mathematics - Numerical Analysis</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_6YCVB2PZ">Preprint PDF					</li>
+					<li id="item_6E528253">Snapshot					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_WAFJZAXD" class="item preprint">
+			<h2>The Frequency Reduced-Basis method: Reduced order models for time-dependent problems using the Laplace transform</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Prépublication</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Ricardo Reyes</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>In this paper, we propose the Frequency Reduced-Basis method: a
+ reduced-basis method to solve time-dependent partial differential 
+equations based on the Laplace transform. Unlike traditional approaches,
+ we begin by applying the Laplace transform to the evolution problem, 
+yielding a timeindependent boundary value problem that depends on the 
+complex Laplace parameter. First, in an offline stage, we appropriately 
+sample the Laplace parameter and solve the collection of problems using 
+the finite element method. Next, we apply a Proper Orthogonal 
+Decomposition (POD) to this collection of solutions in order to obtain a
+ reduced basis that is of dimension much smaller than that of the 
+original solution space. This reduced basis, in turn, is then used to 
+solve the evolution problem using any suitable time-stepping method. A 
+key insight to justify the formulation of the method relies on Hardy 
+spaces of analytic functions. By applying the Paley-Wiener theorem we 
+can then define an isometry between the solution of the time-dependent 
+problem and its Laplace transform. As a consequence of this result, one 
+may conclude that computing a POD with samples taken in the Laplace 
+domain produces an exponentially accurate reduced basis for the 
+time-dependent problem. Numerical experiments characterizing the 
+performance of the method, in terms of accuracy and speed-up, are 
+included for a variety of relevant time-evolution equations.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2025</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.48550/ARXIV.2502.19120">10.48550/ARXIV.2502.19120</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="https://arxiv.org/abs/2502.19120">https://arxiv.org/abs/2502.19120</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>12/05/2026 11:20:27</td>
+					</tr>
+					<tr>
+					<th>Titre abrégé</th>
+						<td>The Frequency Reduced-Basis method</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Datacite)</td>
+					</tr>
+					<tr>
+					<th>Licence</th>
+						<td>Creative Commons Attribution 4.0 International</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>Version Number: 2</td>
+					</tr>
+					<tr>
+					<th>Dépôt</th>
+						<td>arXiv</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>12/05/2026 11:20:27</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>22/05/2026 16:58:16</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+					<li>FOS: Mathematics</li>
+					<li>Numerical Analysis (math.NA)</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_KKZ4J9WN">PDF					</li>
+				</ul>
+			</li>
+
+
+			<li id="item_4DMG4E42" class="item bookSection">
+			<h2>Two Ways to Treat Time in Reduced Basis Methods</h2>
+				<table>
+					<tbody><tr>
+						<th>Type de document</th>
+						<td>Chapitre de livre</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Peter Benner</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Mario Ohlberger</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Anthony Patera</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Gianluigi Rozza</td>
+					</tr>
+					<tr>
+						<th class="editor">Éditeur</th>
+						<td>Karsten Urban</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Silke Glas</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Antonia Mayerhofer</td>
+					</tr>
+					<tr>
+						<th class="author">Auteur</th>
+						<td>Karsten Urban</td>
+					</tr>
+					<tr>
+					<th>Résumé</th>
+						<td>In this chapter, we compare two ways to treat the time within 
+reduced basis methods (RBMs) for parabolic problems: Time-stepping and 
+space-time variational based methods. We brieﬂy recall both concepts and
+ review well-posedness, error control and model reduction in both cases 
+as well as the numerical realization. In particular, we highlight the 
+conceptual differences of the two approaches.</td>
+					</tr>
+					<tr>
+					<th>Date</th>
+						<td>2017</td>
+					</tr>
+					<tr>
+					<th>DOI</th>
+						<td><a href="http://doi.org/10.1007/978-3-319-58786-8_1">10.1007/978-3-319-58786-8_1</a></td>
+					</tr>
+					<tr>
+					<th>URL</th>
+						<td><a href="http://link.springer.com/10.1007/978-3-319-58786-8_1">http://link.springer.com/10.1007/978-3-319-58786-8_1</a></td>
+					</tr>
+					<tr>
+					<th>Consulté le</th>
+						<td>20/05/2026 11:36:47</td>
+					</tr>
+					<tr>
+					<th>Langue</th>
+						<td>en</td>
+					</tr>
+					<tr>
+					<th>Catalogue de bibl.</th>
+						<td>DOI.org (Crossref)</td>
+					</tr>
+					<tr>
+					<th>Extra</th>
+						<td>Series Title: MS&amp;A</td>
+					</tr>
+					<tr>
+					<th>Volume</th>
+						<td>17</td>
+					</tr>
+					<tr>
+					<th>Maison d’édition</th>
+						<td>Springer International Publishing</td>
+					</tr>
+					<tr>
+					<th>Lieu</th>
+						<td>Cham</td>
+					</tr>
+					<tr>
+					<th>ISBN</th>
+						<td>978-3-319-58785-1 978-3-319-58786-8</td>
+					</tr>
+					<tr>
+					<th>Pages</th>
+						<td>1-16</td>
+					</tr>
+					<tr>
+					<th>Titre du livre</th>
+						<td>Model Reduction of Parametrized Systems</td>
+					</tr>
+					<tr>
+					<th>Date d'ajout</th>
+						<td>20/05/2026 11:36:47</td>
+					</tr>
+					<tr>
+					<th>Modifié le</th>
+						<td>20/05/2026 11:43:13</td>
+					</tr>
+				</tbody></table>
+				<h3 class="tags">Marqueurs :</h3>
+				<ul class="tags">
+					<li>A lire (important ou intéressant) ?</li>
+				</ul>
+				<h3 class="attachments">Pièces jointes</h3>
+				<ul class="attachments">
+					<li id="item_DJF7MTTQ">PDF					</li>
+				</ul>
+			</li>
+
+		</ul>
+	
+</body></html>
