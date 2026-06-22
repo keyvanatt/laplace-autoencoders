@@ -49,17 +49,22 @@ def load_slae_from_ckpt(ae_ckpt_path: str, N: int):
 def load_llae_from_ckpt(ae_ckpt_path: str, N: int, Nt: int, K: int):
     """
     Charge un LLAE depuis un checkpoint Lightning AE.
-    Les hyperparamètres d'architecture (latent_dim, dt, time_L) sont lus depuis
-    le checkpoint, pas depuis la config courante.
+    Les hyperparamètres d'architecture (latent_dim, dt, time_L, learnable_laplace,
+    alpha_t, lam) sont lus depuis le checkpoint, pas depuis la config courante.
     Retourne (ae, latent_dim, dt, time_L).
     """
     from laplace_surrogate.models.llae import LLAE
-    ae_ck      = torch.load(ae_ckpt_path, map_location='cpu', weights_only=False)
-    m_cfg      = _ae_model_cfg(ae_ck)
-    latent_dim = int(ae_ck.get('latent_dim') or m_cfg['latent_dim'])
-    dt         = float(ae_ck.get('dt') or m_cfg.get('dt', 1.0))
-    time_L     = int(m_cfg.get('time_L', 8))
-    ae = LLAE(N=N, Nt=Nt, latent_dim=latent_dim, K=K, dt=dt, time_L=time_L)
+    ae_ck             = torch.load(ae_ckpt_path, map_location='cpu', weights_only=False)
+    m_cfg             = _ae_model_cfg(ae_ck)
+    latent_dim        = int(ae_ck.get('latent_dim') or m_cfg['latent_dim'])
+    dt                = float(ae_ck.get('dt') or m_cfg.get('dt', 1.0))
+    time_L            = int(m_cfg.get('time_L', 8))
+    learnable_laplace = bool(m_cfg.get('learnable_laplace', False))
+    import math
+    alpha_t           = float(m_cfg.get('alpha_t', math.exp(-2.0)))
+    lam               = float(m_cfg.get('lam',     math.exp(-2.0)))
+    ae = LLAE(N=N, Nt=Nt, latent_dim=latent_dim, K=K, dt=dt, time_L=time_L,
+              learnable_laplace=learnable_laplace, alpha_t=alpha_t, lam=lam)
     ae.load_state_dict(_strip_model_prefix(ae_ck['state_dict']))
     ae.eval()
     for p in ae.parameters():
