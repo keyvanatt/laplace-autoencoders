@@ -107,25 +107,36 @@ class LLAESurrogateLightningModule(pl.LightningModule):
             return
         ds = dm.dataset
         m  = self.model
+        # Récupère alpha_t et lam depuis les paramètres appris (ou buffers fixes) de Laplace
+        lap = m.laplace
+        if m.learnable_laplace:
+            alpha_t_val = float(lap.log_alpha_t.exp().detach().cpu())
+            lam_val     = float(lap.log_lam.exp().detach().cpu())
+        else:
+            alpha_t_val = float(lap._alpha_t_fixed.cpu())
+            lam_val     = float(lap._lam_fixed.cpu())
         checkpoint.update({
-            'model_type':  'LLAEModel',
-            'K':           m.K,
-            'Nt':          m.Nt,
-            'N':           ds.N,
-            'theta_dim':   ds.theta_dim,
-            'latent_dim':  self._ae_latent_dim,
-            'dt':          self._ae_dt,
-            'time_L':      self._ae_time_L,
-            'hidden_dim':  m.hidden_dim,
-            'head_dim':    m.head_dim,
-            'n_trunk':     m.n_trunk,
-            'n_head':      m.n_head,
-            'freq_L':      m.freq_L,
-            'U_mean':      ds.U_mean,
-            'U_std':       ds.U_std,
-            'theta_mean':  ds.theta_mean,
-            'theta_std':   ds.theta_std,
-            'test_idx':    np.asarray(dm.test_idx),
+            'model_type':         'LLAEModel',
+            'K':                  m.K,
+            'Nt':                 m.Nt,
+            'N':                  ds.N,
+            'theta_dim':          ds.theta_dim,
+            'latent_dim':         self._ae_latent_dim,
+            'dt':                 self._ae_dt,
+            'time_L':             self._ae_time_L,
+            'learnable_laplace':  m.learnable_laplace,
+            'alpha_t':            alpha_t_val,
+            'lam':                lam_val,
+            'hidden_dim':         m.hidden_dim,
+            'head_dim':           m.head_dim,
+            'n_trunk':            m.n_trunk,
+            'n_head':             m.n_head,
+            'freq_L':             m.freq_L,
+            'U_mean':             ds.U_mean,
+            'U_std':              ds.U_std,
+            'theta_mean':         ds.theta_mean,
+            'theta_std':          ds.theta_std,
+            'test_idx':           np.asarray(dm.test_idx),
             'model_state': {k[len('model.'):]: v
                             for k, v in checkpoint['state_dict'].items()
                             if k.startswith('model.')},

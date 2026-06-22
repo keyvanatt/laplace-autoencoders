@@ -170,17 +170,23 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
         ).to(device)
 
     elif model_type == 'LLAEModel':
+        import math
         from laplace_surrogate.models.llae import LLAE
         from laplace_surrogate.models.llae_surrogate import LLAEModel
+        learnable_laplace = bool(ckpt.get('learnable_laplace', False))
+        alpha_t           = float(ckpt.get('alpha_t', math.exp(-2.0)))
+        lam               = float(ckpt.get('lam',     math.exp(-2.0)))
         ae_dummy = LLAE(
             N=ckpt['N'], Nt=ckpt['Nt'], latent_dim=ckpt['latent_dim'], K=ckpt['K'],
             dt=ckpt['dt'], time_L=ckpt.get('time_L', 8),
+            learnable_laplace=learnable_laplace, alpha_t=alpha_t, lam=lam,
         ).to(device)
         hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
         return LLAEModel(
             ae=ae_dummy, theta_dim=ckpt['theta_dim'],
             hidden_dim=hidden_dim, head_dim=ckpt['head_dim'],
             n_trunk=ckpt['n_trunk'], n_head=ckpt['n_head'], freq_L=ckpt['freq_L'],
+            learnable_laplace=learnable_laplace,
         ).to(device)
 
     elif model_type == 'LLAESVDModel':

@@ -63,6 +63,7 @@ class LLAEModel(nn.Module):
         self.encoder = _freeze(copy.deepcopy(ae.encoder))
         self.laplace = copy.deepcopy(ae.laplace)
         if learnable_laplace:
+            self.laplace.learnable = True   # garantit que les caches sont invalidés à chaque step
             for p in self.laplace.parameters():
                 p.requires_grad_(True)
         else:

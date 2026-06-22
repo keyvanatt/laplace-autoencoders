@@ -42,6 +42,8 @@ class AELightningModule(pl.LightningModule):
                 gamma_init=self.cfg.model.gamma_init,
                 time_L=self.cfg.model.time_L,
                 learnable_laplace=self.cfg.model.learnable_laplace,
+                alpha_t=float(self.cfg.model.alpha_t),
+                lam=float(self.cfg.model.lam),
             )
         else:
             raise ValueError(f"Modèle AE inconnu : {name!r}. Attendu : slae | llae")
