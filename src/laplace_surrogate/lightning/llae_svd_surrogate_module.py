@@ -95,7 +95,8 @@ class LLAESVDSurrogateLightningModule(pl.LightningModule):
         cfg_t = self.cfg.training
 
         ds        = dm.dataset
-        N, Nt, K  = ds.N, ds.Nt, ds.K
+        N, Nt     = ds.N, ds.Nt
+        K         = self.cfg.model.K   # ds.K=0 car laplace=False en mode surrogate
         theta_dim = ds.theta_dim
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -117,7 +118,7 @@ class LLAESVDSurrogateLightningModule(pl.LightningModule):
         print("SVD-LLAE surrogate : encodage des latents...")
         z_all = _compute_llae_latents(
             ae.encoder, ds._U_raw, all_idx, N, Nt,
-            ds.U_mean.to(device), ds.U_std.to(device), device,
+            torch.as_tensor(ds.U_mean).to(device), torch.as_tensor(ds.U_std).to(device), device,
             batch_size=cfg_t.get('encode_batch_size', 32),
         )
 
