@@ -56,13 +56,18 @@ def main(cfg: DictConfig):
     mod_path, cls_name, model_cls = module_map[model_name]
     LightningModule = getattr(importlib.import_module(mod_path), cls_name)
 
-    # Lit K et gamma_init depuis le checkpoint AE, avant dm.setup() qui en a besoin
+    # Lit K, gamma_init et pôles optimaux depuis le checkpoint AE, avant dm.setup()
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
     from omegaconf import open_dict
     ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
     with open_dict(cfg):
         cfg.model.K          = ae_hparams['K']
         cfg.model.gamma_init = ae_hparams['gamma_init']
+        # Propager les pôles optimaux uniquement si l'AE a été entraîné avec
+        # (les anciens checkpoints n'ont pas cette info → on ne touche pas le cfg)
+        if ae_hparams['optimal_laplace']:
+            cfg.model.optimal_laplace      = True
+            cfg.model.optimal_laplace_path = ae_hparams['optimal_laplace_path']
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()
@@ -72,6 +77,8 @@ def main(cfg: DictConfig):
     ae_stem  = Path(cfg.training.ae_ckpt).stem
     cfg_t    = cfg.training
     surr_tag = f"t{cfg_t.n_trunk}h{cfg_t.n_head}"
+    if use_svd:
+        surr_tag = f"{surr_tag}_ksvd{cfg_t.k_svd}"
     tag      = f"{model_cls}__{ae_stem}__{surr_tag}"
     run_name = f"{tag}_surr"
 
