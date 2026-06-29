@@ -11,6 +11,24 @@ PYTHONPATH=src .venv/bin/python <script>
 
 All scripts insert `src/` into `sys.path` themselves, but must be run from the repo root.
 
+## Checkpoints
+
+Checkpoints are **not stored in git** (`checkpoints/` is gitignored). They live on the
+Hugging Face Hub: https://huggingface.co/keyvanatt/laplace-autoencoders-checkpoints
+
+```bash
+# Download all checkpoints into checkpoints/ (run after cloning)
+hf download keyvanatt/laplace-autoencoders-checkpoints --local-dir checkpoints
+
+# Upload a new checkpoint after training
+hf upload keyvanatt/laplace-autoencoders-checkpoints checkpoints/<file>.ckpt <file>.ckpt
+
+# Upload many / large files (resumable)
+hf upload-large-folder keyvanatt/laplace-autoencoders-checkpoints checkpoints/ --repo-type model
+```
+
+Never `git add checkpoints/` — it is ignored on purpose to keep the git history small.
+
 ## Repository Layout
 
 ```text
