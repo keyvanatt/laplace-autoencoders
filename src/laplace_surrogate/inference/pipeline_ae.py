@@ -98,20 +98,20 @@ class InferencePipelineAE:
         )
 
         # --- stats de normalisation ---
+        _need_fit = True
+        if 'U_mean' in raw_ckpt and 'U_std' in raw_ckpt:
+            dataset.U_mean = raw_ckpt['U_mean']
+            dataset.U_std  = raw_ckpt['U_std']
+            _need_fit = False
+            
         if laplace and 'lap_mean' in raw_ckpt and 'lap_std' in raw_ckpt:
             # Chemin rapide : stats déjà dans le checkpoint
             dataset.lap_mean = raw_ckpt['lap_mean']
             dataset.lap_std  = raw_ckpt['lap_std']
-            # U_mean/U_std pas nécessaires pour SLAE reconstruct, mais on les met à None
-            dataset.U_mean = None
-            dataset.U_std  = None
-            _need_fit = False
-        else:
-            _need_fit = True
-
-        if not laplace:
-            # LLAE : U_mean/U_std toujours calculés via fit()
-            _need_fit = True
+            if _need_fit:
+                dataset.U_mean = None
+                dataset.U_std  = None
+                _need_fit = False
 
         if _need_fit:
             split    = np.load(cfg_d.split_path)

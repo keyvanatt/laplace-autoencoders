@@ -280,8 +280,8 @@ def optimize_laplace_path(
 
     if log_wandb:
         wandb.init(
-            project="convdiff",
-            name="laplace_opti_s",
+            project="laplace-autoencoders",
+            name=f"laplace_opti_s{K}",
             config=dict(K=K, Nt=Nt, dt=dt, gamma=gamma, lambda_diff=lambda_diff,
                         lambda_x=lambda_x, step=step, n_cases=n_cases, n_latent=n_latent,
                         lambda_ae=lambda_ae, gamma_min=gamma_min, lr_init=lr,
@@ -465,7 +465,7 @@ def optimize_laplace_path(
 if __name__ == '__main__':
     Nt          = 150
     dt          = 1.0
-    K           = 20
+    K           = 16
     gamma       = 0.0
     lambda_diff = 0.5
     lambda_x    = 0.5
