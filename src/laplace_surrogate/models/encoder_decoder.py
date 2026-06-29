@@ -108,9 +108,9 @@ class ConvDecoder(nn.Module):
         self.film1 = nn.Linear(64, 2 * 64)
         self.film2 = nn.Linear(64, 2 * 32)
         self.film3 = nn.Linear(64, 2 * 16)
-        self.deconv1 = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1), nn.BatchNorm2d(64), nn.ReLU())
-        self.deconv2 = nn.Sequential(nn.ConvTranspose2d(64, 32, 4, 2, 1), nn.BatchNorm2d(32), nn.ReLU())
-        self.deconv3 = nn.Sequential(nn.ConvTranspose2d(32, 16, 4, 2, 1), nn.BatchNorm2d(16), nn.ReLU())
+        self.deconv1 = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1), nn.GroupNorm(8, 64), nn.ReLU())
+        self.deconv2 = nn.Sequential(nn.ConvTranspose2d(64, 32, 4, 2, 1), nn.GroupNorm(8, 32), nn.ReLU())
+        self.deconv3 = nn.Sequential(nn.ConvTranspose2d(32, 16, 4, 2, 1), nn.GroupNorm(8, 16), nn.ReLU())
         self.heads = nn.ModuleList([self._make_head() for _ in range(out_channels)])
 
     @staticmethod
