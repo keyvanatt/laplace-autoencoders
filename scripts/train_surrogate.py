@@ -10,6 +10,9 @@ Usage :
     # Variantes SVD (compression des latents par SVD avant le surrogate) :
     PYTHONPATH=src python scripts/train_surrogate.py model=slae training=surrogate_slae_svd
     PYTHONPATH=src python scripts/train_surrogate.py model=llae training=surrogate_llae_svd
+    # Variantes Tucker (compression conjointe fréquence+latent, facteurs figés HOOI) :
+    PYTHONPATH=src python scripts/train_surrogate.py model=slae training=surrogate_slae_tucker
+    PYTHONPATH=src python scripts/train_surrogate.py model=llae training=surrogate_llae_tucker
 """
 import sys
 import os
@@ -29,6 +32,11 @@ _SVD_SURROGATE_MODULES = {
     'llae':  ('laplace_surrogate.lightning.llae_svd_surrogate_module', 'LLAESVDSurrogateLightningModule', 'LLAESVDModel'),
 }
 
+_TUCKER_SURROGATE_MODULES = {
+    'slae':  ('laplace_surrogate.lightning.slae_tucker_surrogate_module', 'SLAETuckerSurrogateLightningModule', 'SLAETuckerModel'),
+    'llae':  ('laplace_surrogate.lightning.llae_tucker_surrogate_module', 'LLAETuckerSurrogateLightningModule', 'LLAETuckerModel'),
+}
+
 
 @hydra.main(config_path="../configs", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -45,12 +53,19 @@ def main(cfg: DictConfig):
     torch.backends.cudnn.benchmark = True
 
     model_name = cfg.model.name
+    use_tucker = bool(cfg.training.get('r_s', None) is not None
+                      and cfg.training.get('r_z', None) is not None)
     use_svd    = bool(cfg.training.get('k_svd', None) is not None
                       and cfg.training.get('lr_V', None) is not None)
-    module_map = _SVD_SURROGATE_MODULES if use_svd else _SURROGATE_MODULES
+    if use_tucker:
+        module_map, variant = _TUCKER_SURROGATE_MODULES, '_tucker'
+    elif use_svd:
+        module_map, variant = _SVD_SURROGATE_MODULES, '_svd'
+    else:
+        module_map, variant = _SURROGATE_MODULES, ''
     if model_name not in module_map:
         raise ValueError(
-            f"Pas de surrogate{'_svd' if use_svd else ''} pour model.name='{model_name}'. "
+            f"Pas de surrogate{variant} pour model.name='{model_name}'. "
             f"Choix : {list(module_map)}"
         )
     mod_path, cls_name, model_cls = module_map[model_name]
@@ -77,7 +92,9 @@ def main(cfg: DictConfig):
     ae_stem  = Path(cfg.training.ae_ckpt).stem
     cfg_t    = cfg.training
     surr_tag = f"t{cfg_t.n_trunk}h{cfg_t.n_head}"
-    if use_svd:
+    if use_tucker:
+        surr_tag = f"{surr_tag}_rs{cfg_t.r_s}rz{cfg_t.r_z}"
+    elif use_svd:
         surr_tag = f"{surr_tag}_ksvd{cfg_t.k_svd}"
     tag      = f"{model_cls}__{ae_stem}__{surr_tag}"
     run_name = f"{tag}_surr"

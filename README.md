@@ -36,6 +36,14 @@ PYTHONPATH=src .venv/bin/python scripts/train_ae.py
 # Étape 2 — Surrogate end-to-end θ→z→U(t)
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py
 
+# Variantes de compression des latents (dispatch automatique selon la config) :
+#   *_svd    → SVD d'un seul mode latent          (k_svd + lr_V)
+#   *_tucker → Tucker conjoint fréquence + latent  (r_s + r_z, facteurs HOOI figés)
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae_svd
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae_svd
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae_tucker
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae_tucker
+
 # Étape 3 — CorrectionAE (post-processing, optionnel)
 PYTHONPATH=src .venv/bin/python scripts/train_corrector.py training=corrector
 ```

@@ -1,0 +1,19 @@
+# Hyperparamètres pour le surrogate Tucker-LLAE (train_surrogate.py model=llae training=surrogate_llae_tucker)
+# Décomposition de Tucker des latents Laplace : factorisation conjointe des modes
+# fréquence (K → r_s) et latent (d_z → r_z). Facteurs U_s, U_z FIGÉS (HOOI offline).
+defaults:
+  - surrogate_arch
+
+epochs: 300
+batch_size: 16
+lr_surrogate: 5.0e-4
+lr_decoder:   5.0e-5
+patience: 40
+
+# Rangs de Tucker : r_s modes fréquence, r_z modes latents
+r_s: 8
+r_z: 16
+hooi_iter: 5
+
+# Checkpoint AE LLAE à charger
+ae_ckpt: checkpoints/llae_best.pt

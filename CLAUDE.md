@@ -141,6 +141,15 @@ PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=s
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae training.ae_ckpt=<ckpt>
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=lslae training=surrogate_lslae training.ae_ckpt=<ckpt>
 
+# Phase 2 variants — SVD compression (single latent mode) or Tucker compression
+# (joint frequency+latent modes, frozen HOOI factors). Dispatch is automatic:
+#   training=*_svd     → k_svd + lr_V present
+#   training=*_tucker  → r_s + r_z present
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae_svd    training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae_svd    training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae_tucker training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae_tucker training.ae_ckpt=<ckpt>
+
 # Phase 3 — Optional corrector (SLAE pipeline only)
 PYTHONPATH=src .venv/bin/python scripts/train_corrector.py training=corrector
 
@@ -168,7 +177,7 @@ pipe = InferencePipeline.from_checkpoint('checkpoints/SLAEModel__slae_ld64_K16_g
 U_pred = pipe.predict([[k, A, C]])  # (B, Nt, N, N) float32
 ```
 
-`InferencePipeline.from_checkpoint` reads `model_type` from the checkpoint and handles `θ` normalization automatically. Supported backends: `SLAEModel`, `LLAEModel`, `LSLAEModel`, `CorrectionAE`.
+`InferencePipeline.from_checkpoint` reads `model_type` from the checkpoint and handles `θ` normalization automatically. Supported backends: `SLAEModel`, `LLAEModel`, `SLAESVDModel`, `LLAESVDModel`, `SLAETuckerModel`, `LLAETuckerModel`, `CorrectionAE`.
 
 ## Checkpoint Naming Convention
 
@@ -177,7 +186,10 @@ AE checkpoints are saved as `{ae_tag}.pt` where `ae_tag` encodes key hyperparame
 - LLAE: `llae_ld{latent_dim}_K{K}_g{gamma_init}[_ll]`
 - LSLAE: `lslae_ld{latent_dim}_K{K}_ksvd{k_svd}[_ll]`
 
-Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}.pt`
+Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}[_ksvd{k_svd}|_rs{r_s}rz{r_z}].pt`
+- direct : `t{n_trunk}h{n_head}`
+- SVD    : `..._ksvd{k_svd}`
+- Tucker : `..._rs{r_s}rz{r_z}`
 
 ## Lightning / Hydra Notes
 
