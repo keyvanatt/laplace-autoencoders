@@ -13,6 +13,8 @@ Supporte les backends (détection automatique depuis model_type) :
   - LLAEModel    (pipeline LLAE — AE latent + surrogate)
   - SLAESVDModel (SLAE + compression SVD des latents Laplace)
   - LLAESVDModel (LLAE + compression SVD des latents temporels)
+  - SLAETuckerModel (SLAE + compression Tucker des latents Laplace)
+  - LLAETuckerModel (LLAE + compression Tucker des latents Laplace)
   - CorrectionAE (post-traitement UNet, enchaîné avec SLAEModel)
 """
 from __future__ import annotations
@@ -143,7 +145,7 @@ class InferencePipeline:
             U_pred = U_pred * U_std + U_mean
             return U_pred.cpu().numpy()
 
-        else:  # SLAESVDModel, LLAESVDModel — generate() retourne déjà U physique
+        else:  # SLAE/LLAE SVD & Tucker — generate() retourne déjà U physique
             U_pred = self.model.generate(theta_norm)
             return U_pred.cpu().numpy()
 
@@ -218,6 +220,48 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             theta_dim   = ckpt['theta_dim'],
             latent_dim  = ckpt['latent_dim'],
             k_svd       = ckpt['k_svd'],
+            freq_L      = ckpt['freq_L'],
+            hidden_dim  = hidden_dim,
+            head_dim    = ckpt['head_dim'],
+            n_trunk     = ckpt['n_trunk'],
+            n_head      = ckpt['n_head'],
+            surr_freq_L = ckpt.get('surr_freq_L', 6),
+            dt          = ckpt.get('dt', 1.0),
+            alpha_t     = ckpt.get('alpha_t', 0.007),
+            lam         = ckpt.get('lam', 3e-5),
+        ).to(device)
+
+    elif model_type == 'LLAETuckerModel':
+        from laplace_surrogate.models.llae_tucker_surrogate import LLAETuckerModel
+        hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
+        return LLAETuckerModel(
+            N          = ckpt['N'],
+            Nt         = ckpt['Nt'],
+            theta_dim  = ckpt['theta_dim'],
+            latent_dim = ckpt['latent_dim'],
+            r_s        = ckpt['r_s'],
+            r_z        = ckpt['r_z'],
+            K          = ckpt['K'],
+            dt         = ckpt['dt'],
+            time_L     = ckpt.get('time_L', 8),
+            hidden_dim = hidden_dim,
+            head_dim   = ckpt['head_dim'],
+            n_trunk    = ckpt['n_trunk'],
+            n_head     = ckpt['n_head'],
+            freq_L     = ckpt['freq_L'],
+        ).to(device)
+
+    elif model_type == 'SLAETuckerModel':
+        from laplace_surrogate.models.slae_tucker_surrogate import SLAETuckerModel
+        hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
+        return SLAETuckerModel(
+            K           = ckpt['K'],
+            Nt          = ckpt['Nt'],
+            N           = ckpt['N'],
+            theta_dim   = ckpt['theta_dim'],
+            latent_dim  = ckpt['latent_dim'],
+            r_s         = ckpt['r_s'],
+            r_z         = ckpt['r_z'],
             freq_L      = ckpt['freq_L'],
             hidden_dim  = hidden_dim,
             head_dim    = ckpt['head_dim'],
