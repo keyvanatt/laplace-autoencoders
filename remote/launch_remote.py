@@ -3,7 +3,8 @@ Launch train_ae.py, train_surrogate.py, and/or train_svd.py on multiple remote h
 
 Usage:
     Edit USERNAME, REMOTE_PROJECT_DIR, AE_JOB_CONFIGS, SURROGATE_JOB_CONFIGS,
-    and SVD_JOB_CONFIGS below (leave any dict empty to skip that training type), then run:
+    SVD_SURROGATE_JOB_CONFIGS, and SVD_JOB_CONFIGS below (leave any dict empty
+    to skip that training type), then run:
         python remote/launch_remote.py
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -36,7 +37,7 @@ AE JOB  —  scripts/train_ae.py  (model=slae|llae  training=ae)
  !! For SLAE, Set batch size to 256. For LLAE, Set batch size to 16
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SURROGATE JOB  —  scripts/trainogate.py
+SURROGATE JOB  —  scripts/train_surrogate.py
                   (model=slae|llae|lslae  training=surrogate_slae|surrogate_llae|surrogate_lslae)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   model                   slae | llae | lslae
@@ -61,14 +62,36 @@ SURROGATE JOB  —  scripts/trainogate.py
   training.lam            Tikhonov ridge                 default 3e-5
 
   LR:
-  training.lrogate   surrogate MLP                  default 3e-4
+  training.lr_surrogate   surrogate MLP                  default 5e-4
   training.lr_decoder     frozen decoder fine-tune        default 5e-5
   training.lr_laplace     Laplace poles (ll tag only)    default 1e-5
   training.epochs         default 300
   training.batch_size     default 16
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SVD JOB  —  scripts/train_svd.py
+SVD SURROGATE JOB  —  scripts/train_surrogate.py
+                       (model=slae|llae  training=surrogate_slae_svd|surrogate_llae_svd)
+SVD tronquée sur les latents (espace latent) avant prédiction par le surrogate.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  model                   slae | llae
+  training                surrogate_slae_svd | surrogate_llae_svd
+
+  training.ae_ckpt        path to frozen AE checkpoint   (required)
+  training.k_svd          number of SVD modes retained   default 16
+
+  Surrogate MLP arch (configs/training/surrogate_arch.yaml):
+  training.hidden_dim / head_dim / n_trunk / n_head   (same as above)
+
+  LR:
+  training.lr_surrogate   surrogate MLP                  default 5e-4
+  training.lr_decoder     frozen decoder fine-tune        default 5e-5
+  training.lr_V           SVD basis V fine-tune           default 5e-4
+  training.epochs         default 300
+  training.batch_size     default 16
+  training.patience       early-stopping patience         default 40
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SVD JOB  —  scripts/train_svd.py  (SVD spatiale — bases dans checkpoints/svd_bases.pt)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   --tag   config tag to train, e.g. K16_ksvd64_g0.010
           (must match a key in checkpoints/svd_bases.pt)
@@ -98,41 +121,69 @@ DEFAULT_HOSTS = [
     "barbeau.polytechnique.fr",
     "ombrette.polytechnique.fr",
     "perdrix.polytechnique.fr",
-    "quetzal.polytechnique.fr",
-    "quiscale.polytechnique.fr",
     "sitelle.polytechnique.fr",
-    "epervier.polytechnique.fr",
-    "dindon.polytechnique.fr",
+    "quiscale.polytechnique.fr",
+    "urabu.polytechnique.fr",
+    "autruche.polytechnique.fr",
     "bengali.polytechnique.fr",
     "coucou.polytechnique.fr",
+    "dindon.polytechnique.fr",
+    "epervier.polytechnique.fr"
 ]
+
+AE_CKPT_DIR = "checkpoints"
+CKPT_DIR = "/Data/KAT/checkpoints"
 
 # One config dict per host — Hydra overrides for train_ae.py
 # Leave empty to skip AE training.
-AE_JOB_CONFIGS: dict[str, dict] = {}
+AE_JOB_CONFIGS: dict[str, dict] = {
+    # ── LLAE  learnable Laplace  (gamma_init=0, ld=64) — resume from checkpoint ─
+
+    "sitelle.polytechnique.fr": {
+        "model": "llae", "training": "ae",
+        "model.K": 16, "model.latent_dim": 64, "model.gamma_init": 0.0,
+        "model.learnable_laplace": "true",
+        "training.ckpt_path": f"{CKPT_DIR}/llae_ld64_K16_g0.0_ll-v2.ckpt",
+    },
+    "rouloul.polytechnique.fr": {
+        "model": "llae", "training": "ae",
+        "model.K": 8, "model.latent_dim": 64, "model.gamma_init": 0.0,
+        "model.learnable_laplace": "true",
+        "training.ckpt_path": f"{CKPT_DIR}/llae_ld64_K8_g0.0_ll-v2.ckpt",
+    },
+    "quiscale.polytechnique.fr": {
+        "model": "llae", "training": "ae",
+        "model.K": 32, "model.latent_dim": 64, "model.gamma_init": 0.0,
+        "model.learnable_laplace": "true",
+        "training.ckpt_path": f"{CKPT_DIR}/llae_ld64_K32_g0.0_ll-v2.ckpt",
+    },
+}
 
 # One config dict per host — Hydra overrides for train_surrogate.py
 # Leave empty to skip surrogate training.
-AE_CKPT_DIR = "checkpoints"
-CKPT_DIR = "/Data/KAT/checkpoints"
 SURROGATE_JOB_CONFIGS: dict[str, dict] = {}
 
-# One config dict per host — argparse overrides for train_svd.py
-# Each dict must contain exactly one key: "tag" (the SVD config tag to train).
-# Hosts rouloul and gymnote are reserved for surrogate jobs above.
-SVD_JOB_CONFIGS: dict[str, dict] = {
+# One config dict per host — Hydra overrides for train_surrogate.py with SVD latent compression.
+# Use model=slae training=surrogate_slae_svd  OR  model=llae training=surrogate_llae_svd.
+# training.ae_ckpt and training.k_svd are the key overrides.
+_K_SVD = 16
+SVD_SURROGATE_JOB_CONFIGS: dict[str, dict] = {
 
-    "quetzal.polytechnique.fr":   {"tag": "K32_ksvd64_g0.010"},
 }
+
+# One config dict per host — argparse overrides for train_svd.py (SVD spatiale).
+# Each dict must contain exactly one key: "tag" (the SVD config tag to train).
+SVD_JOB_CONFIGS: dict[str, dict] = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-PYTHON = ".conda/bin/python"
+PYTHON = "PYTHONPATH=src .conda/bin/python"
 
 _TASK_META = {
-    "ae":        {"script": "scripts/train_ae.py",        "log_prefix": "ae",        "session_prefix": "ae",   "arg_style": "hydra"},
-    "surrogate": {"script": "scripts/train_surrogate.py", "log_prefix": "surrogate", "session_prefix": "surr", "arg_style": "hydra"},
-    "svd":       {"script": "scripts/train_svd.py",       "log_prefix": "svd",       "session_prefix": "svd",  "arg_style": "argparse"},
+    "ae":           {"script": "scripts/train_ae.py",        "log_prefix": "ae",       "session_prefix": "ae",      "arg_style": "hydra"},
+    "surrogate":    {"script": "scripts/train_surrogate.py", "log_prefix": "surrogate","session_prefix": "surr",    "arg_style": "hydra"},
+    "svd_surrogate":{"script": "scripts/train_surrogate.py", "log_prefix": "svd_surr", "session_prefix": "svd_surr","arg_style": "hydra"},
+    "svd":          {"script": "scripts/train_svd.py",       "log_prefix": "svd",      "session_prefix": "svd",     "arg_style": "argparse"},
 }
 
 
@@ -218,17 +269,20 @@ if __name__ == "__main__":
         all_jobs.append((host, "ae", overrides))
     for host, overrides in SURROGATE_JOB_CONFIGS.items():
         all_jobs.append((host, "surrogate", overrides))
+    for host, overrides in SVD_SURROGATE_JOB_CONFIGS.items():
+        all_jobs.append((host, "svd_surrogate", overrides))
     for host, overrides in SVD_JOB_CONFIGS.items():
         all_jobs.append((host, "svd", overrides))
 
     if not all_jobs:
-        console.print("[yellow]AE_JOB_CONFIGS, SURROGATE_JOB_CONFIGS and SVD_JOB_CONFIGS are all empty — nothing to launch.[/yellow]")
+        console.print("[yellow]AE_JOB_CONFIGS, SURROGATE_JOB_CONFIGS, SVD_SURROGATE_JOB_CONFIGS and SVD_JOB_CONFIGS are all empty — nothing to launch.[/yellow]")
         raise SystemExit(0)
 
     ae_count = len(AE_JOB_CONFIGS)
     surr_count = len(SURROGATE_JOB_CONFIGS)
+    svd_surr_count = len(SVD_SURROGATE_JOB_CONFIGS)
     svd_count = len(SVD_JOB_CONFIGS)
-    console.print(f"  [dim]AE jobs: {ae_count}  |  Surrogate jobs: {surr_count}  |  SVD jobs: {svd_count}[/dim]")
+    console.print(f"  [dim]AE jobs: {ae_count}  |  Surrogate jobs: {surr_count}  |  SVD Surrogate jobs: {svd_surr_count}  |  SVD jobs: {svd_count}[/dim]")
     console.print()
 
     password = getpass.getpass(f"Password for {USERNAME}: ")

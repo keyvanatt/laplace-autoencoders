@@ -1,4 +1,4 @@
-\documentclass[a4paper,12pt,leqno]{article}
+﻿\documentclass[a4paper,12pt,leqno]{article}
 \usepackage{amsthm}
 
 \usepackage{amssymb,amsmath,amsfonts}
@@ -18,6 +18,7 @@
 \usepackage{subcaption}
 \usepackage{float}      % pour [H]
 \usepackage{booktabs}   % pour \toprule, \midrule, \bottomrule
+\usepackage{array}      % pour >{\centering} dans tabular
 \usepackage{multirow}
 
 %% ---------- Macros ----------
@@ -32,6 +33,9 @@
 \usepackage{graphicx}
 \usepackage{bm}
 \usepackage{parskip}
+\PassOptionsToPackage{dvipsnames}{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc}
 \usepackage[toc,page]{appendix}
 \graphicspath{ {./images/}{./PlotNeuralNet/}{../plots/} }
 \usepackage[dvipsnames]{xcolor}
@@ -39,6 +43,7 @@
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 \usepackage[pdfencoding=auto]{hyperref}
 \usepackage{authblk}
+\usepackage{microtype}
 \renewcommand\Affilfont{\small}
 
 \newcommand{\vmu}{\bm{\mu}}
@@ -46,21 +51,22 @@
 \renewcommand{\emph}[1]{\textbf{#1}}
 
 \title{Model order reduction for a transient problem using the Laplace transform}
-\author[1,2]{Keyvan Attarian}
-\author[3,2]{Amine Ammar}
+\author[1,3]{Keyvan Attarian}
+\author[2,3]{Amine Ammar}
 \affil[1]{Ecole polytechnique, Institut Polytechnique de Paris}
-\affil[2]{DesCartes Program, WP8, CNRS@CREATE}
-\affil[3]{ENSAM}
+\affil[2]{LAMPA Laboratory \& ESI Group Chair, Arts et Metiers Institute of Technology}
+\affil[3]{DesCartes Program, WP8, CNRS@CREATE}
 \date{Printed \today}
 
 \begin{document}
+\sloppy
 
 \maketitle
 
 \setcounter{tocdepth}{1}
 
 \begin{abstract}
-Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models significantly improves prediction accuracy. The best surrogate model achieves a relative $L^2$ error of ???\%, compared to ???\% for the linear SVD baseline, while providing a ???$\times$ speedup over the high-fidelity solver.
+Model order reduction for parametric transient partial differential equations (PDEs) typically suffers from the high computational cost of predicting long time horizons. To alleviate this, we propose a surrogate modeling strategy that leverages the Laplace transform to map the time domain into a highly compressed set of complex frequency fields. We systematically compare two non-linear compression approaches using autoencoders: Spatial Laplace Autoencoders (SLAE), which compress individual frequency frames, and Latent Laplace Autoencoders (LLAE), which apply the transform directly within a low-dimensional latent space. Our results demonstrate that end-to-end training of the surrogate models significantly improves prediction accuracy. The best surrogate model (LLAE, $d_z=128$, $K=16$) achieves a median relative $L^2$ error of $4.13\%$, a $54\%$ reduction compared to the best linear SVD surrogate ($8.91\%$), while running in under $20$\,ms per sample on GPU.
 \end{abstract}
 
 \tableofcontents
@@ -133,28 +139,28 @@ As a linear reference, we construct a Proper Orthogonal Decomposition (POD) basi
 where $\bm{c}^{(k,r)}, \bm{c}^{(k,i)} \in \R^{k_{\mathrm{svd}}}$ are the projection coefficients. This is the classical Galerkin-POD representation applied frequency-by-frequency in the Laplace domain~\cite{hesthaven2015}.
 
 \paragraph{Surrogate for the SVD coefficients.}
-Given the compact coefficient vectors, the surrogate task is reduced to predicting $2\,K\,k_{\mathrm{svd}}$ scalar targets from the three-dimensional parameter vector $\vmu$. A single \texttt{FreqSurrogate} network (shared trunk + per-frequency heads, same architecture as the AE surrogates) predicts the normalized coefficients for all frequencies jointly:
+Given the compact coefficient vectors, the surrogate task reduces to predicting $2\,K\,k_{\mathrm{svd}}$ scalar targets from $\vmu$. A surrogate MLP $g_{\bm{\theta}}$ (shared trunk + per-frequency heads; architecture detailed in Appendix~\ref{app:architecture}) predicts the normalized coefficients for all frequencies jointly:
 \begin{equation}
     \bm{c}^{(k,r)}, \bm{c}^{(k,i)} = g_{\bm{\theta}}(\vmu, k), \qquad k = 0,\dots,K-1.
 \end{equation}
-The surrogate is trained by minimizing a combined loss of normalized coefficient MSE and physical-field reconstruction MSE (after inverse Laplace transform), following the $\mathcal{L}_{\mathrm{int}} + \mathcal{L}_{\mathrm{rec}}$ decomposition introduced in~\cite{fresca2021}:
+Training minimizes a combined latent-coefficient MSE and physical reconstruction loss (after Tikhonov inversion):
 \begin{equation}
-    \mathcal{L}_{\mathrm{SVD\text{-}surr}} = \alpha_{\mathrm{lat}}\sum_{k=0}^{K-1}\Bigl(\bigl\|g_{\bm{\theta}}^{(k,r)}(\vmu) - \bar{\bm{c}}^{(k,r)}\bigr\|_2^2 + \bigl\|g_{\bm{\theta}}^{(k,i)}(\vmu) - \bar{\bm{c}}^{(k,i)}\bigr\|_2^2\Bigr) + \alpha_{\mathrm{spat}}\,\bigl\|U_{\mathrm{rec}} - U\bigr\|_2^2,
+\begin{aligned}
+    \mathcal{L}_{\mathrm{SVD\text{-}surr}} &= \alpha_{\mathrm{lat}}\sum_{k=0}^{K-1}\Bigl(\bigl\|g_{\bm{\theta}}^{(k,r)}(\vmu) - \bar{\bm{c}}^{(k,r)}\bigr\|_2^2 + \bigl\|g_{\bm{\theta}}^{(k,i)}(\vmu) - \bar{\bm{c}}^{(k,i)}\bigr\|_2^2\Bigr) \\
+    &\quad + \alpha_{\mathrm{spat}}\,\bigl\|U_{\mathrm{rec}} - U\bigr\|_2^2,
+\end{aligned}
 \end{equation}
-where $\bar{\bm{c}}^{(k,\cdot)}$ denotes the normalized coefficients and $U_{\mathrm{rec}}$ is the field reconstructed by back-projecting the predicted coefficients through the fixed bases and applying the inverse Laplace transform. The spatial bases $\bm{V}^{(k,\cdot)}$ remain \emph{fixed} throughout surrogate training: unlike the AE decoder, they are not fine-tuned.
+where $\bar{\bm{c}}^{(k,\cdot)}$ denotes the normalized coefficients and $U_{\mathrm{rec}}$ is the field reconstructed by back-projecting the predicted coefficients through the fixed bases and applying the inverse Laplace transform. The spatial bases $\bm{V}^{(k,\cdot)}$ remain \emph{fixed} throughout surrogate training.
 
 The time series $U(t)$ is reconstructed by back-projecting the predicted coefficients, assembling the complex frequency field, and applying the Tikhonov inversion \eqref{eq:tikhonov}. This pipeline is fully linear in the spatial compression step, making it a clean reference that quantifies the gain of non-linear autoencoders. The irreducible truncation error of the linear basis — controlled by the discarded singular values of $\bm{U}^{(k)}$ — sets a hard floor that non-linear AEs are designed to overcome.
 
 \subsection{Autoencoders in the Laplace Domain}
 
-To design non-linear reduced-order models, we investigate and compare two alternative autoencoder (AE) strategies:
-\begin{itemize}
-    \item \textbf{Spatial Laplace AE (SLAE):} The Laplace transform is computed in the physical domain, and a frequency-conditioned autoencoder compresses and reconstructs each complex frequency frame independently.
-    \item \textbf{Latent Laplace AE (LLAE):} A time-conditioned autoencoder first compresses the physical time-series frames into a low-dimensional latent space, and the Laplace transform is subsequently applied to the temporal latent codes.
-\end{itemize}
-In both configurations, we incorporate an $L_2$ ``ridge'' regularization penalty on the latent representations. This constraint is crucial as it enforces a sufficiently regular and smooth latent space structure, which subsequently makes it much easier for the surrogate model to learn the mapping from the physical parameters $\vmu$ to the latent codes $z$ (as detailed in Section~\ref{sec:surrogate}).
+We investigate two autoencoder architectures that differ solely in \emph{where} the Laplace transform is applied, as illustrated in Figure~\ref{fig:ae_comparison}. In the \textbf{Spatial Laplace AE (SLAE)}, the transform is applied first in the physical domain, and a frequency-conditioned autoencoder then compresses each of the $K$ resulting complex frequency frames independently. In the \textbf{Latent Laplace AE (LLAE)}, the order is reversed: a time-conditioned autoencoder first encodes the full temporal sequence into a compact latent trajectory, and the Laplace transform is subsequently applied within that low-dimensional space.
 
-Both architectures share common conditioning components: a sinusoidal coordinate encoding and Feature-wise Linear Modulation (FiLM). Below, we describe these mechanisms in a general manner using a coordinate $\tau \in [0,1]$ that represents either the frequency ratio $f_k = k/(N_{\mathrm{half}}-1)$ in the spatial approach, or the normalised time step $t/T$ in the latent approach.
+In both cases, an $L_2$ ridge penalty on the latent representations enforces a sufficiently regular structure, which makes the latent space easier for the surrogate to navigate (Section~\ref{sec:surrogate}).
+
+Both architectures share the same conditioning mechanism: a sinusoidal coordinate encoding combined with Feature-wise Linear Modulation (FiLM). The coordinate $\tau \in [0,1]$ represents either the frequency ratio $f_k = k/(K-1)$ for SLAE, or the normalised time step $t/T$ for LLAE.
 
 \paragraph{Sinusoidal Coordinate Encoding.}
 The coordinate $\tau \in [0,1]$ is embedded via sinusoidal basis functions inspired by NeRF positional encoding~\cite{mildenhall2020nerf}:
@@ -175,57 +181,65 @@ The residual formulation $(1 + \alpha_\ell)$ initializes the modulation close to
 \subsubsection{Spatial Laplace AE (SLAE)}
 \label{sec:slae}
 
-In SLAE, the Laplace transform operates directly on the time-domain spatial pixels, transforming the sequence of 2D grids $U(t)$ into $K$ complex-valued frequency frames $\hat{U}(s_k)$. A \emph{frequency-conditioned} encoder (FiLM-modulated convolutional network) compresses each 2-channel (real and imaginary) frame independently into a real \emph{latent vector} $z(s_k) \in \R^{d_z}$:
+SLAE first applies the Laplace transform at the pixel level, converting the $N_t$-frame temporal sequence $U(t)$ into $K$ complex-valued spatial fields $\hat{U}(s_k)$. Each frequency frame, represented as a two-channel (real/imaginary) image, is independently compressed by a FiLM-conditioned convolutional encoder into a real latent vector $z(s_k) \in \R^{d_z}$:
 \begin{equation}
     U(t) \xrightarrow{\mathcal{L}_{\text{pixel-wise}}} \hat{U}(s_k) \xrightarrow{\text{Encoder}(f_k)} z(s_k) \xrightarrow{\text{Decoder}(f_k)} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\text{rec}}(t)
 \end{equation}
-The corresponding decoder upsamples $z(s_k)$ back to the spatial field, with bifurcated output heads for the real and imaginary components to prevent cross-talk. The spatial autoencoder is trained by minimizing a loss function comprising the spatial reconstruction error in the Laplace domain and $L_2$ regularization on the latent representations:
+The decoder reconstructs $\hat{U}(s_k)$ from $z(s_k)$ via separate output heads for the real and imaginary components. Training minimizes the Laplace-domain reconstruction error together with an $L_2$ regularization term:
 \begin{equation}
+    \label{eq:slae_loss}
     \mathcal{L}_{\mathrm{SLAE}} = \left\| \tilde{U}(s_k) - \hat{U}(s_k) \right\|_{\C^{N_x}}^2 + \beta \left\| z(s_k) \right\|_2^2
 \end{equation}
 where $\| \cdot \|_{\C^{N_x}}^2$ is the squared $L_2$ norm over the $N_x$ spatial nodes (real and imaginary parts combined), and $\beta$ is a regularization hyperparameter.
 
 \subsubsection{Latent Laplace AE (LLAE)}
+\label{sec:llae}
 
-Alternatively, LLAE applies the transform within the low-dimensional latent space. The single-channel physical fields $U(t)$ are first encoded frame-by-frame by a similar convolutional encoder into latent codes $z(t) \in \R^{d_z}$, but conditioned on the time ratio $t/T$. The forward Laplace transform is then applied along the time dimension of the latent sequence:
+LLAE encodes the physical frames $U(t)$ into a latent trajectory $z(t) \in \R^{d_z}$ using a time-conditioned convolutional encoder (conditioning on the normalised ratio $t/T$), then applies the Laplace transform directly within this compact latent space:
 \begin{equation}
     U(t) \xrightarrow{\text{Encoder}(t)} z(t) \xrightarrow{\mathcal{L}} \hat{z}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}(t) \xrightarrow{\text{Decoder}(t)} U_{\text{rec}}(t)
 \end{equation}
-This formulation fundamentally reduces the computational overhead of the transform and regularises the dynamics by enforcing temporal consistency within the latent space. However, it introduces a significant computational drawback: LLAE requires passing all $N_t$ physical time frames through the autoencoder (both encoding and decoding) during training and inference, whereas SLAE only processes the $K$ frequency frames. Since $N_t \gg N_L$, the LLAE approach is computationally much heavier. Consequently, under a fixed computational budget, we are constrained in terms of the maximum capacity (or volume) of the autoencoder that can be deployed. Specifically, the loss function is defined as:
+Compressing in the latent space rather than the physical domain offers two advantages: the transform operates on $d_z$-dimensional vectors instead of $N_x$-dimensional fields, and the encoder produces a smoother temporal representation than the raw complex frequency frames, easing the spatial compression task. The main counterpart is computational: at each training step and at inference, the encoder and decoder must process all $N_t$ physical frames, whereas SLAE processes only the $K$ frequency frames. Since $N_t \gg K$, LLAE is significantly heavier, which limits the network capacity that can be deployed under a fixed compute budget. The loss combines three terms:
 \begin{equation}
+\label{eq:llae_loss}
 \begin{aligned}
     \mathcal{L}_{\mathrm{LLAE}} &= \frac{1}{N_t}\sum_{n=0}^{N_t-1} \left\| U_{\mathrm{rec}}(t_n) - U(t_n) \right\|_2^2 \\
     &\quad + \beta_{\mathrm{latent}} \frac{1}{N_t}\sum_{n=0}^{N_t-1} \left\| \tilde{z}(t_n) - z(t_n) \right\|_2^2 \\
     &\quad + \beta \frac{1}{K}\sum_{k=0}^{K-1} \left\| \hat{z}(s_k) \right\|_{\C^{d_z}}^2
 \end{aligned}
 \end{equation}
-which combines the physical-time spatial reconstruction error, the latent reconstruction error between the target latent codes $z(t_n)$ and the reconstructed codes $\tilde{z}(t_n)$, and an $L_2$ regularization penalty on the complex Laplace-domain latent representation $\hat{z}(s_k)$.
-
-The two architectures are compared at the same scale in Figure~\ref{fig:ae_comparison}: box widths are proportional to channel count, so the wider SLAE decoder (D128$\to$D64$\to$D32) and the tall spatial Laplace blocks are immediately visible against the more compact LLAE pipeline.
+which combines the physical-time reconstruction error, a latent consistency term penalizing the round-trip error $\tilde{z}(t_n) - z(t_n)$, and an $L_2$ regularization penalty on the Laplace-domain latent codes $\hat{z}(s_k)$. The latent consistency term is unique to LLAE: it explicitly enforces the strict invertibility of the continuous Laplace transform within the learned discrete latent space, a structural constraint not required by SLAE since it encodes each frequency frame independently.
 
 \begin{figure}
     \centering
     \begin{subfigure}{\textwidth}
         \centering
         \includegraphics[height=3.2cm, width=\textwidth, keepaspectratio]{gen_slae_full.pdf}
-        \caption{SLAE: Laplace applied pixel-wise to the spatial field (large teal blocks, height $\propto N$). The decoder starts at 128 channels (D128), reflecting the 2-channel Re/Im reconstruction.}
+        \caption{SLAE: pixel-wise Laplace transform, then per-frequency convolutional AE ($d_z=64$, $K=16$).}
         \label{fig:slae_arch}
     \end{subfigure}
     \vspace{0.6em}
     \begin{subfigure}{\textwidth}
         \centering
         \includegraphics[height=3.2cm, width=\textwidth, keepaspectratio]{gen_llae_full.pdf}
-        \caption{LLAE: Laplace applied only in the compact $d_z=64$ latent space (small teal blocks). The decoder starts at 64 channels (D64), visibly narrower than SLAE at the same scale.}
+        \caption{LLAE: convolutional AE first, then Laplace transform in latent space ($d_z=64$, $K=16$).}
         \label{fig:llae_arch}
     \end{subfigure}
-    \caption{SLAE (a) and LLAE (b) autoencoder pipelines at the same scale. Box widths are proportional to channel count (16\,→\,5, 32\,→\,7, 64\,→\,10, 128\,→\,13) and heights to spatial resolution. The SLAE decoder (D128→D64→D32) is visibly wider than the LLAE decoder (D64→D32→D16).}
+    \caption{SLAE (a) and LLAE (b) autoencoder pipelines.}
     \label{fig:ae_comparison}
 \end{figure}
 
 \subsection{Surrogate Training}
 \label{sec:surrogate}
 
-Following the DL-ROM paradigm of~\cite{fresca2021}, the surrogate model $g_{\bm{\theta}}$ replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE. Two strategies for constructing the surrogate target $w_k$ are described below.
+Following the DL-ROM paradigm of~\cite{fresca2021}, the surrogate MLP $g_{\bm{\theta}}$ (shared trunk + per-frequency heads; architecture detailed in Figure~\ref{fig:freq_surrogate_arch} and Appendix~\ref{app:architecture}) replaces the encoding steps by learning the direct mapping $\vmu \mapsto w_k$, where $w_k$ denotes the Laplace-domain latent at frequency $s_k$ that feeds the decoder: $w_k = z(s_k) \in \R^{d_z}$ for SLAE, and $w_k = \hat{z}(s_k) \in \C^{d_z}$ for LLAE\@. Two strategies for constructing the surrogate target $w_k$ are described below.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{gen_freq_surrogate.pdf}
+    \caption{\textbf{Surrogate MLP architecture.} A shared trunk maps physical parameters $\vmu$ to a latent representation, which is broadcast to $K$ independent heads. Each head is conditioned on a frequency index via sinusoidal encoding and predicts the target latent $w_k$ for that frequency.}
+    \label{fig:freq_surrogate_arch}
+\end{figure}
 
 \subsubsection{Direct Embedding Prediction}
 
@@ -237,45 +251,19 @@ For LLAE, the time-domain latent sequence $z(t) \in \R^{d_z}$ is first transform
 \begin{equation}
     \vmu \xrightarrow{g_{\bm{\theta}}} \hat{z}_{\text{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}_{\text{pred}}(t) \xrightarrow{\text{Decoder}} U_{\text{rec}}(t)
 \end{equation}
-Both pipelines are illustrated in Figure~\ref{fig:direct_surr}.
 
-\begin{figure}
-    \centering
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{gen_slae_surr.pdf}
-        \caption{SLAE direct surrogate.}
-        \label{fig:slae_surr}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{gen_llae_surr.pdf}
-        \caption{LLAE direct surrogate.}
-        \label{fig:llae_surr}
-    \end{subfigure}
-    \caption{Direct embedding prediction. The FreqSurrogate trunk MLP (4 layers, hidden dim 512) maps $\vmu$ to frequency-indexed latents, decoded by the AE decoder. Left: SLAE predicts real latents $z(s_k)\in\R^{d_z}$. Right: LLAE predicts complex latents $\hat{z}(s_k)\in\C^{d_z}$ (stored as $2d_z$ reals).}
-    \label{fig:direct_surr}
-\end{figure}
+\subsubsection{Latent Sequence SVD Compression}
 
-\subsubsection{SVD Dimensionality Reduction}
+To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the Laplace-domain latents before training the surrogate, an approach inspired by~\cite{mounayer2025}. For both SLAE and LLAE, the SVD is applied in the frequency domain: given the $K$ Laplace-domain latent codes $\{\hat{z}(s_k)\}_{k=1}^{K}$ collected over the training set, a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $\hat{z}(s_k) \approx (\hat{z}(s_k) V) V^\top$. The reduced codes $\hat{G}(s_k) = \hat{z}(s_k)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
 
-To reduce the effective output dimension of the surrogate and simplify its learning task, one can apply a preliminary offline SVD compression to the latent sequence before training the surrogate, an approach inspired by~\cite{mounayer2025}. Given the latent codes $\{e_i(\vmu)\}_{i=1}^{M}$ collected over the training set (with $M = K$ for SLAE, $M = N_t$ for LLAE), a truncated SVD yields a projection matrix $V \in \R^{d_z \times d_{\mathrm{SVD}}}$ (with $d_{\mathrm{SVD}} \ll d_z$) such that $e_i \approx (e_i V) V^\top$. The reduced codes $G_i(\vmu) = e_i(\vmu)\, V \in \R^{d_{\mathrm{SVD}}}$ become the surrogate targets, reducing the prediction problem from dimension $d_z$ to $d_{\mathrm{SVD}}$.
-
-For SLAE (latents indexed by frequency $k$): the projection yields $G(s_k) = z(s_k)\,V$, and the surrogate predicts in the compressed frequency-domain space:
+In the \emph{SLAE-SVD} variant (latents indexed by frequency $k$): the projection yields $G(s_k) = z(s_k)\,V$, and the surrogate predicts in the compressed frequency-domain space:
 \begin{equation}
     \vmu \xrightarrow{g_{\bm{\theta}}} G_{\text{pred}}(s_k) \xrightarrow{V^\top} z_{\text{pred}}(s_k) \xrightarrow{\text{Decoder}} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\text{rec}}(t)
 \end{equation}
-For LLAE (latents indexed by time $t$): the projection yields $G(t) = z(t)\,V$, on which the Laplace transform is applied before surrogate prediction:
+In the \emph{LLAE-SVD} variant, the SVD is likewise applied in the Laplace domain: the projection yields $\hat{G}(s_k) = \hat{z}(s_k)\,V$, and the surrogate predicts the compressed frequency-domain latents before back-projection and inversion:
 \begin{equation}
-    \vmu \xrightarrow{g_{\bm{\theta}}} \hat{G}_{\text{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{G}_{\text{pred}}(t) \xrightarrow{V^\top} \tilde{z}_{\text{pred}}(t) \xrightarrow{\text{Decoder}} U_{\text{rec}}(t)
+    \vmu \xrightarrow{g_{\bm{\theta}}} \hat{G}_{\text{pred}}(s_k) \xrightarrow{V^\top} \hat{z}_{\text{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}_{\text{pred}}(t) \xrightarrow{\text{Decoder}} U_{\text{rec}}(t)
 \end{equation}
-The LLAE-SVD pipeline is illustrated in Figure~\ref{fig:svd_surr}.
-
-\begin{figure}
-    \centering
-    \includegraphics[width=\textwidth]{gen_lslae_surr.pdf}
-    \caption{SVD surrogate pipeline (shown for LLAE). An offline SVD compresses the latent sequence to $G(t)=z(t)V\in\R^{d_\mathrm{SVD}}$. The surrogate predicts Laplace-domain SVD codes $\hat{G}(s_k)\in\C^{d_\mathrm{SVD}}$ (stored as $2d_\mathrm{SVD}$ reals), which are inverted, back-projected via $V^\top$, and decoded by the AE decoder.}
-    \label{fig:svd_surr}
-\end{figure}
 
 In both strategies, the entire pipeline is trained end-to-end to minimise the total physical-time loss:
 \begin{equation}
@@ -285,13 +273,29 @@ where $w_k^{\text{pred}}$ and $w_k^{\text{true}}$ denote the predicted and true 
 
 \subsubsection{Tucker Decomposition in Latent Space}
 
-The SVD approach described above reduces the latent sequence along a single mode at a time: for LLAE it collapses the latent dimension $d_z$, leaving the time axis uncompressed; for SLAE it collapses $d_z$ independently at each frequency, ignoring cross-frequency correlations. Tucker decomposition~\cite{kolda2009tensor} generalises this by simultaneously factorising two modes of the latent tensor. Assembling the LLAE training latents into a three-way tensor $\mathcal{Z} \in \mathbb{R}^{N_{\mathrm{train}} \times N_t \times d_z}$, a Tucker-$(r_t, r_z)$ approximation decomposes each slice as
+Just like the SVD approach described in the previous section, the goal here is to further compress the latent representations of both LLAE and SLAE before training the surrogate MLP, which leads to two distinct variants: \emph{LLAE-Tucker} and \emph{SLAE-Tucker}. While the SVD approach reduces the latent sequence along a single mode at a time (for LLAE-SVD it collapses the latent dimension $d_z$; for SLAE-SVD it collapses $d_z$ independently at each frequency, ignoring cross-frequency correlations), Tucker decomposition~\cite{kolda2009tensor} generalises this by simultaneously factorising two modes of the latent tensor. 
+
+Crucially, for both variants, the Tucker decomposition is applied in the latent space \emph{after} the Laplace transform. We assemble the frequency-domain latents of the training set into a three-way tensor $\hat{\mathcal{Z}} \in \mathbb{C}^{N_{\mathrm{train}} \times K \times d_z}$ (real-valued for SLAE, complex-valued for LLAE). A Tucker-$(r_\mu, r_s, r_z)$ decomposition approximates each scalar element of the tensor as a triple sum:
 \begin{equation}
-    z_i(t) \;\approx\; U^{(t)}\, \mathcal{G}_i\, U^{(z)\top},
-    \qquad
-    U^{(t)} \in \mathbb{R}^{N_t \times r_t},\quad U^{(z)} \in \mathbb{R}^{d_z \times r_z},
+    \hat{\mathcal{Z}}_{i, j, m} \;\approx\; \sum_{p=1}^{r_\mu} \sum_{l=1}^{r_s} \sum_{q=1}^{r_z} \hat{\mathcal{C}}_{p, l, q} \, U^{(\mu)}_{i, p} \, U^{(s)}_{j, l} \, U^{(z)}_{m, q},
 \end{equation}
-where $\mathcal{G}_i \in \mathbb{R}^{r_t \times r_z}$ is the simulation-specific core matrix and the factor matrices $U^{(t)}$, $U^{(z)}$ are shared across all training samples. The orthogonal factors are computed offline by the Higher-Order Orthogonal Iteration (HOOI) algorithm~\cite{delathauwer2000hooi}, which alternates truncated SVD steps along each mode until convergence to a stationary point of the Frobenius-norm approximation error. The surrogate then learns the mapping $\vmu \mapsto \mathcal{G}(\vmu) \in \mathbb{R}^{r_t \times r_z}$, whose dimensionality $r_t \cdot r_z$ can be substantially smaller than the SVD target $N_t \cdot d_{\mathrm{SVD}}$ when temporal and latent correlations are jointly exploited. Reconstruction proceeds as $\tilde{z}(t) = U^{(t)}\,\mathcal{G}(\vmu)\,U^{(z)\top}$, followed by the decoder. The Laplace transform can be applied either to $\tilde{z}(t)$ in the full latent space (analogously to LLAE) or directly to the time-mode projection $G(t) = \mathcal{G}(\vmu) U^{(z)\top} \in \mathbb{R}^{r_t \times d_z}$ before inversion, offering an additional trade-off between compression ratio and spectral fidelity.
+where $\hat{\mathcal{C}} \in \mathbb{C}^{r_\mu \times r_s \times r_z}$ is the global core tensor, and $U^{(\mu)}$, $U^{(s)}$, $U^{(z)}$ are the orthogonal factor matrices for the parameter (sample), frequency, and latent modes, respectively. To enable predictions on unseen test samples, we absorb the parameter-dependent terms into a simulation-specific core matrix $\hat{\mathcal{G}}_i \in \mathbb{C}^{r_s \times r_z}$, whose elements are $(\hat{\mathcal{G}}_i)_{l,q} = \sum_{p=1}^{r_\mu} \hat{\mathcal{C}}_{p,l,q} U^{(\mu)}_{i,p}$. This allows us to rewrite the approximation for the full frequency-domain latent matrix $\hat{Z}_i \in \mathbb{C}^{K \times d_z}$ of the $i$-th simulation in a compact matrix form:
+\begin{equation}
+    \hat{Z}_i \;\approx\; U^{(s)}\, \hat{\mathcal{G}}_i\, U^{(z)\top},
+    \qquad
+    U^{(s)} \in \mathbb{C}^{K \times r_s},\quad U^{(z)} \in \mathbb{C}^{d_z \times r_z}.
+\end{equation}
+The shared orthogonal factors $U^{(s)}$ and $U^{(z)}$ are computed offline by the Higher-Order Orthogonal Iteration (HOOI) algorithm~\cite{delathauwer2000hooi}. The surrogate then learns the mapping $\vmu \mapsto \hat{\mathcal{G}}(\vmu) \in \mathbb{C}^{r_s \times r_z}$, whose dimensionality $r_s \cdot r_z$ is substantially smaller than $K \cdot d_z$ because it jointly exploits cross-frequency and latent correlations.
+
+For LLAE-Tucker, the surrogate predicts the complex-valued core matrix, from which the full Laplace-domain latents are reconstructed and inverted back to the time domain before decoding:
+\begin{equation}
+    \vmu \xrightarrow{g_{\bm{\theta}}} \hat{\mathcal{G}}_{\mathrm{pred}} \xrightarrow{U^{(s)},\, U^{(z)\top}} \hat{z}_{\mathrm{pred}}(s_k) \xrightarrow{\mathcal{L}^{-1}} \tilde{z}_{\mathrm{pred}}(t) \xrightarrow{\mathrm{Decoder}} U_{\mathrm{rec}}(t)
+\end{equation}
+For SLAE-Tucker, the surrogate predicts the real-valued core matrix, which is expanded to the real-valued frequency latents, decoded to spatial Laplace fields, and finally inverted to the physical time domain:
+\begin{equation}
+    \vmu \xrightarrow{g_{\bm{\theta}}} \mathcal{G}_{\mathrm{pred}} \xrightarrow{U^{(s)},\, U^{(z)\top}} z_{\mathrm{pred}}(s_k) \xrightarrow{\mathrm{Decoder}} \tilde{U}(s_k) \xrightarrow{\mathcal{L}^{-1}} U_{\mathrm{rec}}(t)
+\end{equation}
+Both variants share the same conceptual advantage: instead of predicting $K$ independent vectors of size $d_z$, the surrogate predicts a highly compact core matrix that captures the essential spatiotemporal dynamics.
 
 \subsection{Choosing an Optimal Laplace Contour}
 \label{sec:contour_optim}
@@ -302,7 +306,7 @@ The question of how to choose the integration contour $(s_1, \dots, s_K)$ arises
 
 In the LLAE setting, the Laplace transform is applied in the low-dimensional latent space: the surrogate directly predicts latent Laplace coefficients, and the complex frequencies $s_k$ can be made learnable parameters of the model, optimized end-to-end with the rest of the network. This is possible because both the forward quadrature \eqref{eq:laplace_fwd} — a finite sum of complex exponentials $e^{-s_k t_n}$, smooth in $s_k$ — and the Tikhonov inversion \eqref{eq:normal} — a linear solve whose coefficient matrix $\bm{A}$ depends smoothly on $s_k$, $\alpha_t$, and $\lambda$ — are fully differentiable with respect to the contour and regularization parameters.
 
-This is precisely what is done in our LLAE implementation with \texttt{learnable\_laplace=True}: both the real parts $\sigma_k = \mathrm{Re}(s_k)$ and imaginary parts $\omega_k = \mathrm{Im}(s_k)$ of each of the $K$ poles are learned independently, along with the regularization hyperparameters $\alpha_t$ and $\lambda$ (via their log-parameterisation). The poles are initialised on the truncated Bromwich contour ($\omega_k$ at the $K$ first FFT frequencies, $\sigma_k = \gamma_{\mathrm{init}}$ uniform).
+This is precisely what is done in our LLAE implementation: both the real parts $\sigma_k = \mathrm{Re}(s_k)$ and imaginary parts $\omega_k = \mathrm{Im}(s_k)$ of each of the $K$ poles are learned independently, along with the regularization hyperparameters $\alpha_t$ and $\lambda$ (via their log-parameterisation). The poles are initialised on the truncated Bromwich contour ($\omega_k$ at the $K$ first FFT frequencies, $\sigma_k = \gamma_{\mathrm{init}}$ uniform).
 
 \subsubsection{Offline Contour Optimisation for SLAE}
 
@@ -359,7 +363,10 @@ The matrices $\bm{F}$ and $\bm{L}_{\mathrm{reg}}$, and consequently $\bm{A}$, de
 \end{equation}
 where $\epsilon_{\mathrm{surr}} = \mathbb{E}_{\vmu}[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K}]$ is the expected surrogate error. By Jensen's inequality ($\mathbb{E}[\sqrt{X}] \leq \sqrt{\mathbb{E}[X]}$), this expected norm is bounded by:
 \begin{equation}
-    \epsilon_{\mathrm{surr}} \;\leq\; \sqrt{\mathbb{E}_{\vmu}\!\left[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|^2_{\C^K}\right]} = \sqrt{\sum_{k=1}^{K}\mathbb{E}_{\vmu}\!\left[|\hat{u}_k(\vmu) - \tilde{u}_k(\vmu)|^2\right]},
+\begin{aligned}
+    \epsilon_{\mathrm{surr}} &\;\leq\; \sqrt{\mathbb{E}_{\vmu}\!\left[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|^2_{\C^K}\right]} \\
+    &= \sqrt{\sum_{k=1}^{K}\mathbb{E}_{\vmu}\!\left[|\hat{u}_k(\vmu) - \tilde{u}_k(\vmu)|^2\right]},
+\end{aligned}
 \end{equation}
 
 \paragraph{Approximating the Surrogate Error via SVD Residual.}
@@ -369,19 +376,230 @@ Training a full neural surrogate for every proposed contour is computationally i
 \end{equation}
 The minimum of this squared Frobenius norm over all rank-$d_z$ approximations is achieved by the truncated SVD and equals exactly the sum of the discarded squared singular values. The optimal linear baseline error is therefore:
 \begin{equation}
-    \mathcal{E}_{\mathrm{SVD}}(s_k) = \sqrt{\min_{\mathrm{rank}\,\hat{\bm{U}} \leq d_z}\frac{1}{N_{\mathrm{train}}}\left\|\bm{U}^{(k)} - \hat{\bm{U}}\right\|_F^2} = \sqrt{\frac{1}{N_{\mathrm{train}}}\sum_{j > d_z}\!\left(\sigma_j^{(k)}\right)^2},
+\begin{aligned}
+    \mathcal{E}_{\mathrm{SVD}}(s_k) &= \sqrt{\min_{\mathrm{rank}\,\hat{\bm{U}} \leq d_z}\frac{1}{N_{\mathrm{train}}}\left\|\bm{U}^{(k)} - \hat{\bm{U}}\right\|_F^2} \\
+    &= \sqrt{\frac{1}{N_{\mathrm{train}}}\sum_{j > d_z}\!\left(\sigma_j^{(k)}\right)^2},
+\end{aligned}
 \end{equation}
 where $\sigma_j^{(k)}$ are the singular values of $\bm{U}^{(k)}$. This establishes the fundamental lower bound for the expected error of any linear surrogate of latent dimension $d_z$. Since a non-linear AE with bottleneck $d_z$ generalizes the linear SVD, the optimal AE error satisfies $\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$ (see Appendix~\ref{app:bv_proof}). In practice, the actual AE error may differ slightly due to optimisation challenges (local minima, architectural constraints), but for contour optimisation we are primarily interested in the \emph{relative} behavior of $\epsilon_{\mathrm{surr}}$ with respect to the contour rather than its absolute value. The SVD residual is fast and deterministic to compute for any candidate contour, making it highly suitable for iterative optimisation. To account for the enhanced expressivity of the non-linear AE over the linear SVD baseline, we introduce a scaling hyperparameter $\lambda_{\mathrm{AE}} \geq 1$. The final proxy objective is:
 \begin{equation}
 \label{eq:proxy}
-    \mathcal{L}^{\mathrm{proxy}} =
-    \frac{1}{N_{\mathrm{train}}}\sum_{\vmu}\left\|\bm{u}(\vmu) - \bm{u}^*(\vmu)\right\|
-    \;+\;
+\begin{aligned}
+    \mathcal{L}^{\mathrm{proxy}} &=
+    \frac{1}{N_{\mathrm{train}}}\sum_{\vmu}\left\|\bm{u}(\vmu) - \bm{u}^*(\vmu)\right\| \\
+    &\quad +\;
     \frac{\left\|\bm{A}^{-1}\bm{F}^H\right\|}{\lambda_{\mathrm{AE}}}
     \cdot
     \sqrt{\frac{1}{N_{\mathrm{train}}}\sum_{k=1}^{K}\sum_{j > d_z}\!\left(\sigma_j^{(k)}\right)^2}.
+\end{aligned}
 \end{equation}
 Minimizing \eqref{eq:proxy} by gradient descent jointly optimizes the contour frequencies and the regularization parameters, trading bias against variance in a principled and fully differentiable manner.
+
+% ─── Architecture Summary ────────────────────────────────────────────────────
+\subsection{Architecture Summary}
+\label{sec:arch_summary}
+
+\newlength{\pipearrow}\setlength{\pipearrow}{0.7cm}% tweak arrow/gap length
+
+\tikzset{
+  % generic block
+  bk/.style={
+    rectangle, rounded corners=2pt, draw, line width=0.55pt,
+    minimum height=0.40cm, minimum width=0.68cm,
+    font=\scriptsize\bfseries, inner sep=2.5pt
+  },
+  % surrogate MLP  – blue
+  Bmlp/.style={bk, draw=blue!60!black, fill=blue!12},
+  % Laplace / inverse Laplace – cyan
+  Blap/.style={bk, draw=cyan!60!black,  fill=cyan!12},
+  % SVD back-projection  – orange
+  Bsvd/.style={bk, draw=orange!80!black, fill=orange!18},
+  % Tucker reconstruction – red-orange
+  Btck/.style={bk, draw=red!60!orange, fill=red!10!orange!15},
+  % Conv encoder: angles=110 (wide top) + rotate=90 CCW → wide side ends up LEFT
+  Benc/.style={
+    trapezium, trapezium left angle=110, trapezium right angle=110,
+    draw=green!60!black, fill=green!22, shape border rotate=90,
+    minimum height=0.52cm,
+    font=\scriptsize\bfseries, inner sep=2pt, line width=0.55pt
+  },
+  % Conv decoder: angles=70 (wide bottom) + rotate=90 CCW → wide side ends up RIGHT
+  Bdec/.style={
+    trapezium, trapezium left angle=70, trapezium right angle=70,
+    draw=green!60!black, fill=green!10, shape border rotate=90,
+    minimum height=0.52cm,
+    font=\scriptsize\bfseries, inner sep=2pt, line width=0.55pt
+  },
+  % arrow style
+  ar/.style={->, >=Stealth, thin, black!55},
+  % tiny inter-node label
+  lbl/.style={font=\tiny, text=black!60, inner sep=0.8pt},
+  % latent-space waypoint circle (placed midway on latent arrows)
+  Blat/.style={circle, draw=violet!70!black, fill=violet!18,
+    minimum size=0.42cm, inner sep=1.5pt, line width=0.55pt,
+    font=\tiny\bfseries}
+}
+
+% Macro: one pipeline cell, centred vertically on the table baseline
+\newcommand{\pipe}[1]{%
+  \begin{tikzpicture}[
+      baseline=(current bounding box.center),
+      node distance=1.1cm and 0.22cm]
+    #1
+  \end{tikzpicture}%
+}
+
+Table~\ref{tab:arch_summary} provides a synthetic overview of all nine pipelines studied. The two top rows describe the \emph{autoencoder reconstruction} (Phase~1, input $U(t)$); the seven remaining rows compare the \emph{surrogate inference} pipelines (Phase~2, input $\vmu$), grouped by the domain in which the Laplace transform is applied. Colour code: \textcolor{blue!70!black}{\rule[0.3ex]{0.7em}{0.6ex}} MLP surrogate; \textcolor{cyan!70!black}{\rule[0.3ex]{0.7em}{0.6ex}} Laplace $\mathcal{L}$ / inverse $\mathcal{L}^{-1}$; \textcolor{orange!80!black}{\rule[0.3ex]{0.7em}{0.6ex}} SVD back-projection; \textcolor{red!60!orange}{\rule[0.3ex]{0.7em}{0.6ex}} Tucker back-projection; \textcolor{green!60!black}{\rule[0.3ex]{0.7em}{0.6ex}} convolutional encoder E (wide$\to$narrow) / decoder D (narrow$\to$wide); \textcolor{violet!70!black}{$\bullet$} latent-space representation on the arrow.
+
+\begin{table}[htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{2.8}
+\setlength{\tabcolsep}{8pt}
+\begin{tabular}{l >{\centering\arraybackslash}p{10.0cm} c}
+\toprule
+\textbf{Model}
+  & \textbf{Pipeline}
+  & \textbf{$\mathcal{L}$ applied in} \\
+\midrule
+
+\multicolumn{3}{l}{\small\textit{Autoencoder reconstruction \upshape(Phase~1, input: $U(t)$)}} \\[2pt]
+
+\textbf{SLAE} &
+\pipe{
+  \node[bk, draw=gray!60, fill=gray!10, font=\scriptsize] (inp) {$U(t)$};
+  \node[Blap, right=\the\pipearrow of inp] (fl)  {$\mathcal{L}$};
+  \node[Benc, right=\the\pipearrow of fl]  (enc) {E};
+  \node[Bdec, right=\the\pipearrow of enc] (dec) {D};
+  \node[Blap, right=\the\pipearrow of dec] (il)  {$\mathcal{L}^{-1}$};
+  \node[right=\the\pipearrow of il, font=\scriptsize, black!55] (out) {$U_\mathrm{rec}$};
+  \draw[ar] (inp) -- (fl);
+  \draw[ar] (fl)  -- (enc) node[lbl,above,midway] {$\hat{U}_k$};
+  \draw[ar] (enc) -- (dec) node[Blat,midway] {$z_k$};
+  \draw[ar] (dec) -- (il)  node[lbl,above,midway] {$\hat{\tilde{U}}_k$};
+  \draw[ar] (il)  -- (out);
+}
+& phys.\ domain \\
+
+\textbf{LLAE} &
+\pipe{
+  \node[bk, draw=gray!60, fill=gray!10, font=\scriptsize] (inp) {$U(t)$};
+  \node[Benc, right=\the\pipearrow of inp] (enc) {E};
+  \node[Blap, right=\the\pipearrow of enc] (fl)  {$\mathcal{L}$};
+  \node[Blap, right=\the\pipearrow of fl]  (il)  {$\mathcal{L}^{-1}$};
+  \node[Bdec, right=\the\pipearrow of il]  (dec) {D};
+  \node[right=\the\pipearrow of dec, font=\scriptsize, black!55] (out) {$U_\mathrm{rec}$};
+  \draw[ar] (inp) -- (enc);
+  \draw[ar] (enc) -- (fl)  node[lbl,above,midway] {$z(t)$};
+  \draw[ar] (fl)  -- (il)  node[Blat,midway] {$\hat{z}_k$};
+  \draw[ar] (il)  -- (dec) node[lbl,above,midway] {$\tilde{z}(t)$};
+  \draw[ar] (dec) -- (out);
+}
+& latent space \\
+
+\midrule
+
+\multicolumn{3}{l}{\small\textit{Surrogate inference \upshape(Phase~2, input: $\vmu$)}} \\[2pt]
+
+\textbf{SVD} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Bsvd, right=\the\pipearrow of mlp] (vt) {$V^\top$};
+  \node[Blap, right=\the\pipearrow of vt]  (il) {$\mathcal{L}^{-1}$};
+  \node[right=\the\pipearrow of il, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (vt) node[lbl,above,midway] {$c_k$};
+  \draw[ar] (vt)  -- (il) node[lbl,above,midway] {$\hat{U}_k$};
+  \draw[ar] (il)  -- (out);
+}
+& phys.\ domain \\
+
+\textbf{SLAE-Direct} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Bdec, right=\the\pipearrow of mlp] (dec) {D};
+  \node[Blap, right=\the\pipearrow of dec] (il)  {$\mathcal{L}^{-1}$};
+  \node[right=\the\pipearrow of il, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (dec) node[Blat,midway] {$z_k$};
+  \draw[ar] (dec) -- (il)  node[lbl,above,midway] {$\hat{U}_k$};
+  \draw[ar] (il)  -- (out);
+}
+& phys.\ domain \\
+
+\textbf{SLAE-SVD} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Bsvd, right=\the\pipearrow of mlp] (vt)  {$V^\top$};
+  \node[Bdec, right=\the\pipearrow of vt]  (dec) {D};
+  \node[Blap, right=\the\pipearrow of dec] (il)  {$\mathcal{L}^{-1}$};
+  \node[right=\the\pipearrow of il, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (vt)  node[lbl,above,midway] {$G_k$};
+  \draw[ar] (vt)  -- (dec) node[Blat,midway] {$z_k$};
+  \draw[ar] (dec) -- (il)  node[lbl,above,midway] {$\hat{U}_k$};
+  \draw[ar] (il)  -- (out);
+}
+& phys.\ domain \\
+
+\textbf{SLAE-Tucker} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Btck, right=\the\pipearrow of mlp] (tck) {$\mathcal{T}^\top$};
+  \node[Bdec, right=\the\pipearrow of tck] (dec) {D};
+  \node[Blap, right=\the\pipearrow of dec] (il)  {$\mathcal{L}^{-1}$};
+  \node[right=\the\pipearrow of il, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (tck) node[lbl,above,midway] {$\mathcal{G}$};
+  \draw[ar] (tck) -- (dec) node[Blat,midway] {$z_k$};
+  \draw[ar] (dec) -- (il)  node[lbl,above,midway] {$\hat{U}_k$};
+  \draw[ar] (il)  -- (out);
+}
+& phys.\ domain \\
+
+\midrule
+
+\textbf{LLAE-Direct} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Blap, right=\the\pipearrow of mlp] (il)  {$\mathcal{L}^{-1}$};
+  \node[Bdec, right=\the\pipearrow of il]  (dec) {D};
+  \node[right=\the\pipearrow of dec, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (il)  node[Blat,midway] {$\hat{z}_k$};
+  \draw[ar] (il)  -- (dec) node[lbl,above,midway] {$\tilde{z}(t)$};
+  \draw[ar] (dec) -- (out);
+}
+& latent space \\
+
+\textbf{LLAE-SVD} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Bsvd, right=\the\pipearrow of mlp] (vt)  {$V^\top$};
+  \node[Blap, right=\the\pipearrow of vt]  (il)  {$\mathcal{L}^{-1}$};
+  \node[Bdec, right=\the\pipearrow of il]  (dec) {D};
+  \node[right=\the\pipearrow of dec, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (vt)  node[lbl,above,midway] {$\hat{G}_k$};
+  \draw[ar] (vt)  -- (il)  node[Blat,midway] {$\hat{z}_k$};
+  \draw[ar] (il)  -- (dec) node[lbl,above,midway] {$\tilde{z}(t)$};
+  \draw[ar] (dec) -- (out);
+}
+& latent space \\
+
+\textbf{LLAE-Tucker} &
+\pipe{
+  \node[Bmlp] (mlp) {MLP};
+  \node[Btck, right=\the\pipearrow of mlp] (tck) {$\mathcal{T}^\top$};
+  \node[Blap, right=\the\pipearrow of tck] (il)  {$\mathcal{L}^{-1}$};
+  \node[Bdec, right=\the\pipearrow of il]  (dec) {D};
+  \node[right=\the\pipearrow of dec, font=\scriptsize, black!55] (out) {$U(t)$};
+  \draw[ar] (mlp) -- (tck) node[lbl,above,midway] {$\mathcal{G}$};
+  \draw[ar] (tck) -- (il)  node[Blat,midway] {$\hat{z}_k$};
+  \draw[ar] (il)  -- (dec) node[lbl,above,midway] {$\tilde{z}(t)$};
+  \draw[ar] (dec) -- (out);
+}
+& latent space \\
+
+\bottomrule
+\end{tabular}
+\caption{Architecture summary of the nine pipelines studied. \emph{Top block} (Phase~1): autoencoder reconstruction, input $U(t)$. \emph{Bottom block} (Phase~2): surrogate inference pipelines mapping $\vmu \to U(t)$, grouped by the domain in which $\mathcal{L}$ is applied — physical domain (SLAE family) or latent space (LLAE family). Encoder E (darker green, wide$\to$narrow) and decoder D (lighter green, narrow$\to$wide) are horizontal trapezoids.}
+\label{tab:arch_summary}
+\end{table}
 
 \section{Results}
 
@@ -409,9 +627,14 @@ We first characterize the autoencoder architectures in isolation, then evaluate 
 \subsection{SVD Baseline Results}
 \label{sec:svd_results}
 
-We first characterize the linear SVD baseline (Section~\ref{sec:svd_baseline}) by sweeping its three hyperparameters independently around a base configuration ($K=16$, $k_{\mathrm{svd}}=64$, $\gamma=0.01$): the number of Laplace frequencies $K \in \{8,16,32\}$, the number of SVD modes $k_{\mathrm{svd}} \in \{32,64,128\}$, and the damping parameter $\gamma \in \{0.0,0.001,0.01\}$. All evaluations are computed on the 1620 held-out test simulations using the pure SVD reconstruction (without a surrogate), i.e., projecting the true test fields onto the training-set bases.
+We characterize the linear SVD baseline (Section~\ref{sec:svd_baseline}) by sweeping its three hyperparameters independently around a base configuration ($K=16$, $k_{\mathrm{svd}}=64$, $\gamma=0.01$): the number of Laplace frequencies $K \in \{8,16,32\}$, the number of SVD modes $k_{\mathrm{svd}} \in \{32,64,128\}$, and the damping parameter $\gamma \in \{0.0,0.001,0.01\}$.
 
-\begin{table}[H]
+\subsubsection{Latent space quality (linear reconstruction)}
+\label{sec:svd_rec}
+
+All evaluations are computed on the 1620 held-out test simulations using the pure SVD reconstruction (without a surrogate), i.e., projecting the true test fields onto the training-set bases.
+
+\begin{table}[htbp]
     \centering
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{cccrrr}
@@ -431,70 +654,130 @@ We first characterize the linear SVD baseline (Section~\ref{sec:svd_baseline}) b
     \label{tab:svd_results}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_sweep_gamma.png}
-    \caption{Effect of the damping parameter $\gamma$ on SVD baseline reconstruction ($K=16$, $k_{\mathrm{svd}}=64$). Left: distribution of the relative $L^2$ error on the test set (violin plots; black line = median, dashed orange = mean). Right: per-frequency reconstruction error in the Laplace domain. A small positive $\gamma$ reduces aliasing artifacts at low frequencies without noticeably increasing error at high frequencies.}
-    \label{fig:svd_sweep_gamma}
+    \includegraphics[width=\textwidth]{svd_rec_ablation.png}
+    \caption{SVD reconstruction ablation (test set, median $\pm$ IQR, violin plots; black line = median, dashed orange = mean). From left to right: effect of the damping parameter $\gamma$ ($K=16$, $k_{\mathrm{svd}}=64$), effect of the number of Laplace frequencies $K$ ($k_{\mathrm{svd}}=64$, $\gamma=0.01$), and effect of the number of SVD modes $k_{\mathrm{svd}}$ ($K=16$, $\gamma=0.01$).}
+    \label{fig:svd_ablation}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.5\textwidth]{svd_sweep_K.png}
-    \caption{Effect of the number of Laplace frequencies $K$ on SVD baseline reconstruction ($k_{\mathrm{svd}}=64$, $\gamma=0.01$). Increasing $K$ beyond 16 yields only marginal improvement, indicating that the low-frequency modes already capture the dominant dynamics of the transient field.}
-    \label{fig:svd_sweep_K}
+    \includegraphics[width=\textwidth]{svd_rec_per_freq.png}
+    \caption{SVD reconstruction — per-frequency Laplace-domain error (median $\pm$ IQR, test set). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $k_{\mathrm{svd}}$.}
+    \label{fig:svd_per_freq}
 \end{figure}
 
-\begin{figure}[H]
+The SVD reconstruction error is governed by the singular value decay of the Laplace-domain field matrices $\bm{U}^{(k)}$. The per-frequency breakdown (Figure~\ref{fig:svd_per_freq}) reveals that the linear basis is most accurate at low Laplace frequencies ($k=0$--$3$), where the spatial mode structure is smooth and low-rank, but degrades steadily at higher frequencies where the fields become more localized and the singular values decay more slowly.
+
+Increasing $k_{\mathrm{svd}}$ beyond 64 reduces this high-frequency error only marginally (Figure~\ref{fig:svd_ablation}, right), indicating that the residual error is not a truncation artifact but an intrinsic limit of the linear subspace. Similarly, the choice of $K$ (Figure~\ref{fig:svd_ablation}, centre) has little effect once the dominant transient content is captured by the first 16 frequencies: beyond $K=16$, additional modes add noise rather than information.
+
+The damping $\gamma$ (Figure~\ref{fig:svd_ablation}, left) appears benign at the level of the global physical-field error: the three values $\gamma \in \{0, 0.001, 0.01\}$ yield nearly identical median errors (8.42\%, 8.38\%, 8.09\%). However, the per-frequency breakdown (Figure~\ref{fig:svd_per_freq}, left) tells a more nuanced story: the Laplace-domain error is systematically \emph{lower} for $\gamma=0$ at every frequency index. This apparent contradiction reveals two distinct sources of error. The \emph{SVD truncation error} decreases with $\gamma=0$ because a purely imaginary contour concentrates energy more tightly, making each frequency frame more compressible. The \emph{Tikhonov inversion error} then propagates Laplace-domain residuals back to the time domain; a larger $\gamma$ partially compensates the SVD error in the physical domain. The two errors trade off, leaving the net physical-field error nearly unchanged.
+
+These observations establish the linear SVD as a well-characterized reference: its residual error floor, set by the discarded singular values of $\bm{U}^{(k)}$, is the target that the non-linear autoencoders of Section~\ref{sec:ae_perf} are designed to push below.
+
+\subsubsection{SVD surrogate}
+\label{sec:svd_surr}
+
+We now evaluate the full SVD pipeline end-to-end: a network (Section~\ref{sec:svd_baseline}) predicts the SVD coefficients from $\vmu$, and the reconstructed field is obtained by back-projection through the fixed bases and Tikhonov inversion. Table~\ref{tab:svd_surr_results} reports the test-set errors alongside the reconstruction floor from Table~\ref{tab:svd_results}, and Figure~\ref{fig:svd_rec_vs_surr} compares both side by side.
+
+\begin{table}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_sweep_ksvd.png}
-    \caption{Effect of the number of SVD modes $k_{\mathrm{svd}}$ on SVD baseline reconstruction ($K=16$, $\gamma=0.01$). Left: physical-field error distribution. Right: per-frequency error in the Laplace domain. The error decreases monotonically with $k_{\mathrm{svd}}$ but saturates quickly, reflecting a hard reconstruction floor imposed by the linearity of the spatial basis.}
-    \label{fig:svd_sweep_ksvd}
+    \small
+    \setlength{\tabcolsep}{5pt}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{cccrrrrr}
+        \toprule
+        $k_{\mathrm{svd}}$ & $K$ & $\gamma$
+            & \textbf{Rec med (\%)} & \textbf{Surr med (\%)} & \textbf{Surr p90 (\%)}
+            & \textbf{Gap (pp)} & \textbf{Lat (ms)} \\
+        \midrule
+         64 & 32 & 0.01  &  7.57 &  8.75 & 17.44 & $+1.17$ & $5.6 \pm 0.0$ \\
+         64 & 16 & 0.01  &  8.09 &  8.91 & 16.34 & $+0.82$ & $3.5 \pm 0.2$ \\
+         64 & 16 & 0.001 &  8.38 &  8.94 & 15.36 & $+0.56$ & $3.5 \pm 0.1$ \\
+         64 & 16 & 0.0   &  8.42 &  8.96 & 15.54 & $+0.54$ & $3.5 \pm 0.1$ \\
+        128 & 16 & 0.01  &  7.04 & 11.29 & 21.74 & $+4.26$ & $3.7 \pm 0.1$ \\
+         32 & 16 & 0.01  & 11.42 & 11.69 & 23.44 & $+0.27$ & $3.4 \pm 0.2$ \\
+         64 &  8 & 0.01  & 12.01 & 12.41 & 18.40 & $+0.41$ & $2.9 \pm 0.2$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{SVD surrogate results on the test set (1620 simulations), sorted by surrogate median error.\emph{Rec med}: pure SVD reconstruction error (lower bound). \emph{Surr med/p90}: end-to-end surrogate error. \emph{Gap}: difference surrogate $-$ reconstruction (positive = surrogate adds error on top of the linear floor). \emph{Lat}: GPU inference latency at batch size 1 (NVIDIA RTX A5000, 50 timed runs).}
+    \label{tab:svd_surr_results}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_rec_vs_surr.png}
+    \caption{SVD reconstruction (blue) vs.\ end-to-end surrogate (green): median relative $L^2$ error for all configurations (median $\pm$ IQR). Arrows indicate the surrogate overhead.}
+    \label{fig:svd_rec_vs_surr}
 \end{figure}
 
-The SVD reconstruction error is governed by the singular value decay of the Laplace-domain field matrices $\bm{U}^{(k)}$. The per-frequency breakdown (right panels of Figures~\ref{fig:svd_sweep_gamma} and~\ref{fig:svd_sweep_ksvd}) reveals that the linear basis is most accurate at low Laplace frequencies ($k=0$--$3$), where the spatial mode structure is smooth and low-rank, but degrades steadily at higher frequencies where the fields become more localized and the singular values decay more slowly. Increasing $k_{\mathrm{svd}}$ beyond 64 reduces this high-frequency error only marginally, indicating that the residual error is not a truncation artifact but an intrinsic limit of the linear subspace for this problem. Similarly, the choice of $K$ (Figure~\ref{fig:svd_sweep_K}) has little effect once the dominant transient content is captured by the first 16 frequencies: beyond $K=16$, additional modes add noise rather than information. The damping $\gamma$ (Figure~\ref{fig:svd_sweep_gamma}) is benign in the range $[0,0.01]$, with a small positive value slightly regularizing the low-frequency modes. These observations establish the linear SVD as a well-characterized reference: its residual error floor, set by the discarded singular values, is the target that the non-linear autoencoders of Section~\ref{sec:ae_perf} are designed to push below.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_surr_ablation.png}
+    \caption{SVD surrogate ablation (test set, median $\pm$ IQR). From left to right: effect of $\gamma$ ($K=16$, $k_{\mathrm{svd}}=64$), effect of $K$ ($k_{\mathrm{svd}}=64$, $\gamma=0.01$), and effect of $k_{\mathrm{svd}}$ ($K=16$, $\gamma=0.01$). Black line = median, dashed orange = mean.}
+    \label{fig:svd_surr_ablation}
+\end{figure}
+
+For most configurations, the surrogate step introduces only a small overhead above the linear reconstruction floor: the gap ranges from $+0.27$ pp ($k_{\mathrm{svd}}=32$) to $+1.17$ pp ($K=32$), confirming that the MLP can reliably predict the SVD coefficients from $\vmu$ with little additional error. The notable exception is $k_{\mathrm{svd}}=128$, $K=16$: despite offering the best reconstruction floor (7.04\%), the surrogate error rises sharply to 11.29\% (a gap of $+4.26$ pp). This degradation is consistent with the curse of dimensionality in the learning problem: with $2 \times K \times k_{\mathrm{svd}} = 4{,}096$ scalar targets, the surrogate must fit a much higher-dimensional output, and the increased target space overwhelms the benefit of the larger SVD basis. The best SVD surrogate overall is $k_{\mathrm{svd}}=64$, $K=16$, $\gamma=0.01$ (8.91\% median), which represents the optimal balance between basis expressivity and surrogate learnability.
+
+\paragraph{Inference latency.}
+The SVD surrogate is extremely fast: latency ranges from 2.9\,ms ($K=8$) to 5.6\,ms ($K=32$) per sample at batch size 1 on the NVIDIA RTX A5000 (Figure~\ref{fig:svd_surr_bench}). The pipeline scales efficiently to larger batches, reaching 800--870 samples/s at batch size 32. The dominant cost is the matrix--vector back-projection through $\bm{V}^{(k)}$ and the Tikhonov inversion, not the neural network forward pass itself.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_surr_bench.png}
+    \caption{SVD surrogate inference benchmark (NVIDIA RTX A5000, 50 timed CUDA Event runs, 10 warm-up runs). Left: per-sample latency at batch size 1, sorted by latency. Right: throughput (samples/s) vs.\ $k_{\mathrm{svd}}$ at batch size 32.}
+    \label{fig:svd_surr_bench}
+\end{figure}
+
+Per-sample error distributions for all SVD surrogate configurations are provided in Appendix~\ref{app:histograms}.
 
 \subsection{Autoencoder Performance}
 \label{sec:ae_perf}
 
 Table~\ref{tab:ae_results} reports the relative $L^2$ reconstruction error on the held-out test set (1620 simulations) for all trained AE checkpoints, evaluated on the physical field $U(t)$.
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
+    \small
+    \setlength{\tabcolsep}{5pt}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{llcccrrrr}
         \toprule
         \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} & \textbf{vs.\ SVD (pp)} \\
         \midrule
         \multirow{7}{*}{LLAE}
-          & 128 & 16 & 0.01  & 2.92 & 3.15 & 4.38  & $-4.12$ \\
+          & 128 & 16 & 0.01  & \textbf{2.92} & 3.15 & 4.38  & $-4.12$ \\
           & 64  & 32 & 0.01  & 3.19 & 3.53 & 5.11  & $-4.38$ \\
           & 64  & 16 & 0.01  & 3.20 & 3.47 & 5.04  & $-4.89$ \\
           & 64  & 16 & 0.0   & 3.26 & 3.61 & 5.24  & $-5.16$ \\
           & 64  & 16 & 0.001 & 3.32 & 3.65 & 5.16  & $-5.06$ \\
-          & 64  & 8  & 0.01  & 3.35 & 3.66 & 5.26  & $-8.66$ \\
+          & 64  &  8 & 0.01  & 3.35 & 3.66 & 5.26  & $-8.66$ \\
           & 32  & 16 & 0.01  & 3.43 & 3.85 & 5.60  & $-7.99$ \\
         \midrule
         \multirow{7}{*}{SLAE}
-          & 64  & 16 & 0.0   & 7.78  & 8.11  & 9.91  & $-0.64$ \\
-          & 64  & 16 & 0.001 & 7.82  & 8.27  & 10.36 & $-0.56$ \\
-          & 128 & 16 & 0.01  & 7.98  & 8.40  & 10.45 & $+0.94$ \\
-          & 64  & 32 & 0.01  & 8.34  & 9.27  & 13.43 & $+0.77$ \\
-          & 64  & 16 & 0.01  & 8.92  & 9.53  & 12.55 & $+0.83$ \\
+          & 64  & 16 & 0.0   & \textbf{7.78} &  8.11 &  9.91 & $-0.64$ \\
+          & 64  & 16 & 0.001 & 7.82  &  8.27 & 10.36 & $-0.56$ \\
+          & 128 & 16 & 0.01  & 7.98  &  8.40 & 10.45 & $+0.94$ \\
+          & 64  & 32 & 0.01  & 8.34  &  9.27 & 13.43 & $+0.77$ \\
+          & 64  & 16 & 0.01  & 8.92  &  9.53 & 12.55 & $+0.83$ \\
           & 32  & 16 & 0.01  & 10.76 & 11.14 & 14.76 & $-0.66$ \\
-          & 64  & 8  & 0.01  & 12.26 & 12.74 & 15.40 & $+0.25$ \\
+          & 64  &  8 & 0.01  & 12.26 & 12.74 & 15.40 & $+0.25$ \\
         \bottomrule
     \end{tabular}
     \caption{Relative $L^2$ reconstruction error on the test set (1620 simulations). The last column gives the difference in median error relative to the linear SVD baseline at matching $(K, k_{\mathrm{svd}}=d_z, \gamma)$: negative values indicate improvement over SVD, positive values indicate that SVD outperforms the AE. Best per family in bold.}
     \label{tab:ae_results}
 \end{table}
 
-Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints, sorted by median error with IQR error bars. LLAE consistently outperforms SLAE across all hyperparameter configurations, achieving a best median error of 2.92\% ($d_z=128$, $K=16$) versus 7.78\% for the best SLAE ($d_z=64$, $K=16$, $\gamma=0$). Both families improve substantially over the linear SVD baseline of Section~\ref{sec:svd_results}, confirming that non-linear compression breaks through the floor set by the discarded singular values of $\bm{U}^{(k)}$: LLAE reduces the median error by roughly a factor of four relative to the SVD, and even the best SLAE checkpoint matches or beats SVD at comparable latent dimension. This gap stems from the nature of the compression problem each architecture faces. SLAE must encode each complex frequency frame $\hat{U}(s_k) \in \C^{N_x}$ with $N_x = 128^2$ spatial points independently; this is a spatially rich, high-dimensional input where the convolutional bottleneck is genuinely constraining. LLAE instead encodes single-channel physical frames $U(t) \in \R^{N_x}$ that are smoother and more structured, before applying the Laplace transform in the compact $d_z$-dimensional latent space, a substantially easier per-frame task.
+Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints. The two families present a stark contrast. LLAE achieves a best median error of 2.92\% ($d_z=128$, $K=16$), a factor of four below the linear SVD baseline. SLAE yields errors in the range 7.78\%--12.26\%, broadly comparable to SVD: the \emph{vs.\ SVD} column of Table~\ref{tab:ae_results} hovers around zero, positive as often as negative. Taken as a pure compression stage, SLAE does not offer a meaningful gain over the linear reference. This may appear disappointing, but the picture changes substantially at the surrogate stage (Section~\ref{sec:surr_results}).
 
-\begin{figure}[H]
+Two compounding factors explain this divergence (Sections~\ref{sec:slae}--\ref{sec:llae}). First, the input spaces differ: SLAE compresses high-dimensional complex frequency frames $\hat{U}(s_k)$, whereas LLAE encodes smoother physical frames — an intrinsically easier task. Second, the training objectives are asymmetric: LLAE's loss~\eqref{eq:llae_loss} includes a direct physical-time reconstruction term that provides dense temporal supervision, while SLAE deliberately omits it during Phase~1 (Section~\ref{sec:slae}) to preserve its computational advantage.
+
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{ae_bar_all.png}
-    \caption{Reconstruction error for all 14 AE checkpoints, sorted by median relative $L^2$ error on the test set ($n=1620$). Error bars indicate the interquartile range. LLAE variants (red) achieve consistently lower errors than SLAE variants (blue).}
+    \caption{Reconstruction error for all 14 AE checkpoints, sorted by median relative $L^2$ error on the test set ($n=1620$, error bars = IQR). LLAE in red, SLAE in blue.}
     \label{fig:ae_bar_all}
 \end{figure}
 
@@ -502,7 +785,7 @@ Figures~\ref{fig:llae_ablation} and~\ref{fig:slae_ablation} report ablation stud
 
 Within LLAE (Figure~\ref{fig:llae_ablation}), increasing the latent dimension from $d_z=32$ to $d_z=128$ reduces the median error from 3.43\% to 2.92\%, indicating that the latent bottleneck has not yet saturated at $d_z=64$. The number of Laplace frequencies $K$ has little impact: errors at $K=8$, 16, and 32 are 3.35\%, 3.20\%, and 3.19\% respectively, suggesting that 8–16 frequencies already capture the dominant transient dynamics. The damping parameter $\gamma$ is similarly insensitive in the range $[0, 0.01]$, consistent with the smooth energy envelope of the exponential decay at these timescales.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{llae_ablation.png}
     \caption{LLAE ablation study. From left to right: effect of latent dimension $d_z$ ($K=16$, $\gamma=0.01$), number of Laplace frequencies $K$ ($d_z=64$, $\gamma=0.01$), and damping parameter $\gamma$ ($d_z=64$, $K=16$). Violin plots show the full error distribution; black line is the median, dashed orange line is the mean.}
@@ -511,7 +794,7 @@ Within LLAE (Figure~\ref{fig:llae_ablation}), increasing the latent dimension fr
 
 Within SLAE (Figure~\ref{fig:slae_ablation}), errors increase sharply at low $K$ ($K=8$: 12.26\%) and low $d_z$ ($d_z=32$: 10.76\%), pointing to a harder compression problem where both the spectral and spatial bottlenecks are binding simultaneously. Increasing $K$ to 32 does not improve reconstruction (8.34\% vs.\ 7.78\% at $K=16$), likely because higher Laplace frequencies carry less spatial energy and expose the spatial compression bottleneck. The SLAE error distribution also shows a heavier right tail (higher p90) than LLAE, reflecting occasional failure cases where spatial compression degrades on outlier samples.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{slae_ablation.png}
     \caption{SLAE ablation study. Same layout as Figure~\ref{fig:llae_ablation} (fixed parameters: $K=16$, $\gamma=0.01$ / $d_z=64$, $\gamma=0.01$ / $d_z=64$, $K=16$). Note the larger y-axis range compared to LLAE.}
@@ -520,17 +803,19 @@ Within SLAE (Figure~\ref{fig:slae_ablation}), errors increase sharply at low $K$
 
 For SLAE, Figure~\ref{fig:slae_per_freq} shows the reconstruction error broken down per Laplace frequency $k$. The error is lowest at low frequencies ($k=0$--3, where most signal energy is concentrated) and rises monotonically toward higher frequencies, confirming that the spatial compression bottleneck is more severe for the fine-scale, high-frequency content.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{slae_per_freq.png}
-    \caption{SLAE — per-frequency reconstruction error in the Laplace domain (median $\pm$ IQR, 200 test samples). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $d_z$. Error increases monotonically with frequency index $k$, reflecting the concentration of signal energy at low frequencies.}
+    \caption{SLAE — per-frequency reconstruction error in the Laplace domain (median $\pm$ IQR, 200 test samples). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $d_z$.}
     \label{fig:slae_per_freq}
 \end{figure}
 
-\paragraph{Inference latency.}
-Table~\ref{tab:bench} and Figure~\ref{fig:bench} report per-sample inference latency and GPU throughput measured with CUDA Events on an NVIDIA RTX 3090 (10 warm-up runs, 50 timed runs, batch size 1 for latency; max batch size for throughput). SLAE is approximately $2.4\times$ faster per sample than LLAE at $K=16$ (8.0\,ms vs.\ $\sim\!19$–20\,ms), because its inference path processes only $K$ frequency frames through the decoder, whereas LLAE must decode all $N_t=150$ time frames. At $K=8$, SLAE latency drops to 5.5\,ms. SLAE also requires far less GPU memory (112\,MB at $K=16$ vs.\ 525\,MB for LLAE), enabling a $5\times$ larger maximum batch size.
+Comparing with the SVD per-frequency breakdown (Figure~\ref{fig:svd_per_freq}), SLAE achieves roughly half the per-frequency error of SVD at each $k$: the convolutional encoder captures non-linear structure that the linear projection cannot. Yet this per-frequency advantage does not translate into a better overall spatial reconstruction (Table~\ref{tab:ae_results}). The reason is Tikhonov regularisation: the inverse transform~\eqref{eq:tikhonov}--\eqref{eq:normal} damps all frequencies uniformly, so the benefit of encoding each frequency more accurately is partially cancelled before the spatial field is recovered. The global spatial error is therefore a \emph{regularisation-weighted} aggregate of the per-frequency errors, not a direct reflection of per-frequency compression quality.
 
-\begin{table}[H]
+\paragraph{Inference latency.}
+Table~\ref{tab:bench} and Figure~\ref{fig:bench} report per-sample inference latency and GPU throughput measured with CUDA Events on an NVIDIA RTX 3090 (10 warm-up runs, 50 timed runs, batch size 1 for latency; max batch size for throughput). SLAE is approximately $2.4\times$ faster per sample than LLAE at $K=16$ (8.0\,ms vs.\ $\sim\!19$–20\,ms), a direct consequence of the architectural difference detailed in Sections~\ref{sec:slae}--\ref{sec:llae}: SLAE decodes only $K$ frequency frames at inference, whereas LLAE must decode all $N_t=150$ time frames. At $K=8$, SLAE latency drops to 5.5\,ms. SLAE also requires far less GPU memory (112\,MB at $K=16$ vs.\ 525\,MB for LLAE), enabling a $5\times$ larger maximum batch size.
+
+\begin{table}[htbp]
     \centering
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{lccrrr}
@@ -551,65 +836,249 @@ Table~\ref{tab:bench} and Figure~\ref{fig:bench} report per-sample inference lat
     \label{tab:bench}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{ae_inference_bench.png}
-    \caption{Inference benchmark on an NVIDIA RTX 3090. Left: per-sample latency (batch size 1, 50 CUDA Event runs). Right: throughput at maximum batch size. SLAE processes only $K$ frequency frames per sample, yielding $2.4\times$ lower latency and $5\times$ larger feasible batch size than LLAE.}
+    \caption{Inference benchmark on an NVIDIA RTX 3090. Left: per-sample latency (batch size 1, 50 CUDA Event runs). Right: throughput at maximum GPU-filling batch size.}
     \label{fig:bench}
 \end{figure}
 
 \subsection{Surrogate Prediction Performance}
+\label{sec:surr_results}
 
-Table~\ref{tab:surr_results} reports the relative $L^2$ error on the held-out test set (1620 simulations) for all trained surrogate checkpoints, evaluated on the physical field $U(t)$.
+\subsubsection{Direct surrogate performance}
+\label{sec:direct_surr}
 
-\begin{table}[H]
+Table~\ref{tab:surr_results} reports the relative $L^2$ error on the held-out test set (1620 simulations) for all 14 end-to-end surrogate checkpoints, evaluated on the physical field $U(t)$. All three model families (SVD, SLAE, LLAE) use the same surrogate MLP architecture (Appendix~\ref{app:architecture}), so the comparison isolates the effect of the spatial compression strategy rather than differences in the predictor capacity. Two additional columns facilitate interpretation: \emph{Gap} is the difference between the surrogate median and the standalone AE reconstruction median from Table~\ref{tab:ae_results} — a positive value indicates overhead introduced by the surrogate step, while a negative value means that joint fine-tuning of the decoder actually \emph{improves} upon the frozen-AE baseline; \emph{vs SVD} is the difference relative to the matching SVD surrogate from Table~\ref{tab:svd_surr_results} at the same $(K, d_z, \gamma)$, and is negative throughout, confirming that all AE surrogates outperform the linear baseline.
+
+\begin{table}[htbp]
     \centering
+    \small
+    \setlength{\tabcolsep}{5pt}
     \renewcommand{\arraystretch}{1.3}
-    \begin{tabular}{llcccrrr}
+    \begin{tabular}{llcccrrrrr}
         \toprule
-        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \textbf{Model} & $d_z$ & $K$ & $\gamma$
+            & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)}
+            & \textbf{Gap (pp)} & \textbf{vs SVD (pp)} \\
         \midrule
         \multirow{7}{*}{LLAE}
-          & 128 & 16 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 32 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 16 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 16 & 0.0   & ??? & ??? & ??? \\
-          & 64  & 16 & 0.001 & ??? & ??? & ??? \\
-          & 64  & 8  & 0.01  & ??? & ??? & ??? \\
-          & 32  & 16 & 0.01  & ??? & ??? & ??? \\
+          & 128 & 16 & 0.01  & \textbf{4.13} & 4.48 & 6.82  & $+1.21$ & $-7.16$ \\
+          & 64  & 32 & 0.01  &          4.63 & 4.97 & 7.45  & $+1.44$ & $-4.12$ \\
+          & 64  & 16 & 0.01  &          4.18 & 4.52 & 6.84  & $+0.98$ & $-4.73$ \\
+          & 64  & 16 & 0.0   &          4.25 & 4.60 & 7.09  & $+0.99$ & $-4.71$ \\
+          & 64  & 16 & 0.001 &          4.21 & 4.53 & 6.91  & $+0.89$ & $-4.73$ \\
+          & 64  &  8 & 0.01  &          4.18 & 4.62 & 7.11  & $+0.83$ & $-8.23$ \\
+          & 32  & 16 & 0.01  &          4.31 & 4.75 & 7.27  & $+0.88$ & $-7.38$ \\
         \midrule
         \multirow{7}{*}{SLAE}
-          & 64  & 16 & 0.0   & ??? & ??? & ??? \\
-          & 64  & 16 & 0.001 & ??? & ??? & ??? \\
-          & 128 & 16 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 32 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 16 & 0.01  & ??? & ??? & ??? \\
-          & 32  & 16 & 0.01  & ??? & ??? & ??? \\
-          & 64  & 8  & 0.01  & ??? & ??? & ??? \\
+          & 64  & 16 & 0.0   &          7.38 & 7.52 & 8.80  & $-0.40$ & $-1.58$ \\
+          & 64  & 16 & 0.001 &          7.42 & 7.56 & 8.89  & $-0.40$ & $-1.52$ \\
+          & 128 & 16 & 0.01  &          7.49 & 7.66 & 9.16  & $-0.49$ & $-3.80$ \\
+          & 64  & 32 & 0.01  & \textbf{5.69} & 6.06 & 7.97  & $-2.65$ & $-3.06$ \\
+          & 64  & 16 & 0.01  &          7.59 & 7.86 & 9.49  & $-1.33$ & $-1.32$ \\
+          & 32  & 16 & 0.01  &          7.62 & 7.84 & 9.49  & $-3.14$ & $-4.07$ \\
+          & 64  &  8 & 0.01  &         11.61 & 11.87 & 13.83 & $-0.65$ & $-0.80$ \\
         \bottomrule
     \end{tabular}
-    \caption{Relative $L^2$ error on the test set (1620 simulations) for end-to-end surrogate models. Rows ordered as in Table~\ref{tab:ae_results}. Best per family in bold.}
+    \caption{Direct surrogate results on the test set (1620 simulations), same row order as Table~\ref{tab:ae_results}. \emph{Gap}: surrogate median $-$ AE reconstruction median; negative values indicate that end-to-end fine-tuning improves upon the standalone AE. \emph{vs SVD}: surrogate median $-$ matching SVD surrogate median (Table~\ref{tab:svd_surr_results}); all values are negative. Best per family in bold.}
     \label{tab:surr_results}
 \end{table}
 
+\paragraph{Overall accuracy.}
+LLAE achieves 4.13--4.63\% median $L^2$ error across all configurations, compared to 5.69--11.61\% for SLAE. The best LLAE surrogate ($d_z=128$, $K=16$, $\gamma=0.01$, 4.13\%) represents a $\mathbf{54\%}$ reduction in median error relative to the best SVD surrogate (8.91\%), while the best SLAE surrogate ($d_z=64$, $K=32$, $\gamma=0.01$, 5.69\%) achieves a $\mathbf{36\%}$ reduction. Figure~\ref{fig:surr_bar} summarises all 14 checkpoints sorted by median error.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{surr_bar.png}
+    \caption{Surrogate checkpoint comparison: median $L^2$ relative error on the test set ($n=1620$), sorted by median with IQR error bars. LLAE (red) achieves 4.1--4.6\%, SLAE (blue) 5.7--11.6\%. The best SVD surrogate (8.91\%) is indicated by a dashed horizontal line for reference.}
+    \label{fig:surr_bar}
+\end{figure}
+
+\paragraph{End-to-end fine-tuning effect.}
+The Gap column reveals a qualitative asymmetry between the two families. For LLAE, the surrogate step introduces a small positive overhead of $+0.83$ to $+1.44$\,pp above the AE reconstruction floor: the surrogate approximation is not perfectly lossless, but the cost is modest given that the AE floor itself already saturates below 3.5\%.
+
+For SLAE, by contrast, the Gap is \emph{negative} across all configurations, ranging from $-0.40$ to $-3.14$\,pp — meaning that the end-to-end surrogate pipeline \emph{outperforms} the standalone SLAE autoencoder. The mechanism is the following. During Phase~1 (AE training), the SLAE loss $\mathcal{L}_{\mathrm{SLAE}}$ (equation~\eqref{eq:slae_loss}, Section~\ref{sec:slae}) is defined purely in the Laplace domain: the decoder is never directly supervised on physical-time reconstruction quality, as computing a physical-time loss would require $N_t$-frame decoder passes and negate SLAE's speed advantage. During Phase~2 (surrogate training), the combined loss $\mathcal{L}_{\mathrm{total}}$ (Section~\ref{sec:surrogate}) introduces a direct physical-time reconstruction term for the first time, and the decoder is jointly fine-tuned through it. This spatial supervision signal corrects residual errors that the Laplace-domain loss alone was unable to resolve. The effect is largest when the AE floor is highest: at $d_z=32$ ($-3.14$\,pp) and $K=32$ ($-2.65$\,pp), the spatial loss during surrogate training compensates for the harder compression task, lowering the error below the standalone AE baseline.
+
+\paragraph{Hyperparameter sensitivity.}
+LLAE surrogates remain highly robust: varying $K$ from 8 to 32, $d_z$ from 32 to 128, or $\gamma$ from 0 to 0.01 all yield errors in a tight 4.13--4.63\% band, consistent with the insensitivity already observed at the AE level (Section~\ref{sec:ae_perf}). SLAE is more sensitive: $K=8$ collapses to 11.61\% (the spectral truncation is too severe for the surrogate to compensate), while $K=32$ is the best SLAE configuration precisely because the decoder, given access to 32 Laplace frequencies, can recover finer spatial structure during fine-tuning. Ablation violin plots are provided in Appendix~\ref{app:surr_ablation}.
+
+\paragraph{Inference latency.}
+The surrogate MLP (architecture detailed in Appendix~\ref{app:architecture}) adds negligible latency to the AE decoding pipeline: measured on an NVIDIA RTX A5000, SLAE at $K=16$ runs at $8.4 \pm 0.1$\,ms per sample and LLAE at $18.3 \pm 0.7$\,ms, virtually identical to the AE-only figures reported in Table~\ref{tab:bench} and consistent with the linear projection cost dominating over the network forward pass. SLAE therefore preserves its ${\approx}2.2\times$ latency advantage over LLAE. Figure~\ref{fig:surr_bench} details the latency breakdown across all 14 checkpoints.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{surr_bench.png}
+    \caption{Surrogate inference benchmark (NVIDIA RTX A5000, 50 CUDA Event timed runs, batch size 1). Left: per-sample latency by model family and $K$. Right: accuracy--latency scatter (median $L^2$ error vs.\ latency).}
+    \label{fig:surr_bench}
+\end{figure}
+
+Per-checkpoint error histograms for all 14 surrogate checkpoints are provided in Appendix~\ref{app:histograms} (Figure~\ref{fig:surr_histograms}).
+
+\subsection{Simplifying the latent space: AE + SVD surrogates}
+\label{sec:ae_svd_surr}
+
+To evaluate whether simplifying the latent representation before learning the dynamics can improve the predictor's accuracy, we assess a hybrid approach inspired by Rank Reduction Autoencoders (RRAE) \cite{mounayer2025}: projecting the latent trajectories onto a truncated SVD basis before applying the surrogate model. We evaluate 26 AE+SVD surrogate checkpoints across the LLAE and SLAE families. In these models, the spatial AE is kept frozen, and the latent dimension is further reduced to $k_{svd}$ (either 16 or 32) using POD (SVD), before an MLP predicts the reduced coefficients from the physical parameters. 
+
+Table~\ref{tab:ae_svd_surr_results} reports the relative $L^2$ error on the held-out test set evaluated on the physical field $U(t)$.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \setlength{\tabcolsep}{5pt}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{llcccrrrr}
+        \toprule
+        \textbf{Model} & $d_z$ & $K$ & $\gamma$ & $k_{svd}$
+            & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} \\
+        \midrule
+        \multirow{14}{*}{LLAE}
+          & 64  & 16 & 0.01  & 32 & \textbf{4.24} & 4.61 & 6.75 \\
+          & 64  & 32 & 0.01  & 32 & 4.29 & 4.69 & 7.02 \\
+          & 64  & 16 & 0.001 & 32 & 4.44 & 4.96 & 7.41 \\
+          & 64  & 16 & 0.0   & 32 & 4.50 & 4.97 & 7.29 \\
+          & 64  &  8 & 0.01  & 32 & 4.60 & 5.04 & 7.47 \\
+          & 128 & 16 & 0.01  & 32 & 4.77 & 5.30 & 7.82 \\
+          & 32  & 16 & 0.01  & 16 & 5.55 & 6.29 & 9.39 \\
+          & 64  & 32 & 0.01  & 16 & 5.58 & 6.22 & 9.35 \\
+          & 128 & 16 & 0.01  & 16 & 5.83 & 6.51 & 9.48 \\
+          & 64  & 16 & 0.01  & 16 & 5.84 & 6.58 & 9.79 \\
+          & 64  & 16 & 0.001 & 16 & 5.90 & 6.72 & 9.92 \\
+          & 64  & 16 & 0.0   & 16 & 5.94 & 6.76 & 10.18 \\
+          & 64  &  8 & 0.01  & 16 & 6.54 & 7.37 & 11.05 \\
+        \midrule
+        \multirow{12}{*}{SLAE}
+          & 64  & 32 & 0.01  & 32 & \textbf{6.03} & 6.58 & 9.02 \\
+          & 64  & 32 & 0.01  & 16 & 6.96 & 7.80 & 11.24 \\
+          & 64  & 16 & 0.0   & 32 & 7.50 & 7.73 & 9.26 \\
+          & 64  & 16 & 0.001 & 32 & 7.62 & 7.88 & 9.52 \\
+          & 64  & 16 & 0.01  & 32 & 7.90 & 8.32 & 10.54 \\
+          & 32  & 16 & 0.01  & 16 & 7.95 & 8.38 & 10.71 \\
+          & 64  & 16 & 0.001 & 16 & 8.01 & 8.43 & 10.80 \\
+          & 128 & 16 & 0.01  & 32 & 8.12 & 8.57 & 10.98 \\
+          & 64  & 16 & 0.0   & 16 & 8.13 & 8.61 & 11.06 \\
+          & 64  & 16 & 0.01  & 16 & 8.71 & 9.40 & 12.68 \\
+          & 128 & 16 & 0.01  & 16 & 8.89 & 9.71 & 13.43 \\
+          & 64  &  8 & 0.01  & 32 & 11.64 & 11.93 & 13.96 \\
+          & 64  &  8 & 0.01  & 16 & 11.97 & 12.38 & 14.88 \\
+        \bottomrule
+    \end{tabular}
+    \caption{AE+SVD surrogate results on the test set ($n=1620$), evaluating the physical field reconstruction error using LLAE and SLAE autoencoders coupled with an intermediate SVD compression ($k_{svd} \in \{16, 32\}$). Best median per family in bold.}
+    \label{tab:ae_svd_surr_results}
+\end{table}
+
+\paragraph{Does simplifying the latent space help?}
+The central question of this approach is whether predicting on a smaller, linear, and orthogonalized latent space simplifies the MLP's task enough to overcome the information loss of the SVD truncation. The results indicate that \textbf{it does not}. 
+The best LLAE-SVD configuration achieves a 4.24\% error, which is slightly worse than the best direct surrogate model (4.13\%). For SLAE, the best AE+SVD surrogate achieves 6.03\%, compared to 5.69\% for the direct surrogate. The MLP is highly capable of navigating the full $d_z$-dimensional latent space, and applying an SVD bottleneck discards subtle spatial details that the direct surrogate successfully learns to predict. Consequently, simplifying the latent space via SVD before the temporal surrogate actually degrades the final reconstruction.
+
+As illustrated in Figure~\ref{fig:svd_surr_medians}, LLAE variants consistently outperform SLAE variants for the AE+SVD surrogate approach, replicating the pattern observed with the autoencoders themselves.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{svd_surr_medians.png}
+    \caption{AE+SVD surrogate checkpoint comparison: median $L^2$ relative error with IQR error bars, grouping by model family. LLAE achieves 4.2--6.5\%, SLAE 6.0--12.0\%.}
+    \label{fig:svd_surr_medians}
+\end{figure}
+
+\paragraph{Impact of $k_{svd}$.}
+To quantify the benefit of retaining a larger number of SVD modes, we compare pairs of configurations differing only in $k_{svd}$ (16 vs.\ 32). Figure~\ref{fig:svd_surr_ksvd_impact} highlights that setting $k_{svd}=32$ systematically improves the surrogate's accuracy across all models (all points lie below the $y=x$ diagonal). The gain is significantly more pronounced for LLAE models (between $+1.06$ and $+1.94$\,pp reduction in median error) than for SLAE models ($+0.33$ to $+0.93$\,pp), indicating that LLAE latent spaces contain more useful fine-grained information captured by the additional 16 SVD modes, whereas SLAE may inherently discard spatial details at the AE stage, limiting the potential gains of a larger $k_{svd}$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_surr_ksvd_impact.png}
+    \caption{Impact of $k_{svd}$ on SVD surrogate performance. Left: Scatter of paired median errors showing $k_{svd}=32$ consistently outperforms $k_{svd}=16$. Right: Absolute error reduction when shifting from 16 to 32 modes, sorted by magnitude.}
+    \label{fig:svd_surr_ksvd_impact}
+\end{figure}
+
+\paragraph{Hyperparameter sensitivity.}
+Similar to direct surrogates, we observe varying sensitivity to hyperparameters like the number of Laplace frequencies $K$ or the latent dimension $d_z$. Ablation analysis per family reveals that $K$ plays a significant role in SLAE, with lower values like $K=8$ severely degrading performance (up to 12\% median error). Conversely, LLAE is slightly more resilient, although its performance remains influenced by $K$ and $k_{svd}$. The distribution shapes further emphasize the tighter error bands achieved by higher $k_{svd}$ configurations.
+
+\paragraph{Inference latency.}
+Introducing the SVD decoding step (matrix multiplication) between the MLP prediction and the spatial decoder adds a slight computational overhead. Measured on an NVIDIA RTX A5000 (batch size 1), LLAE-SVD requires approximately 22\,ms per sample, while SLAE-SVD requires about 9\,ms per sample. The SLAE-SVD model maintains its pronounced speed advantage (${\approx}2.4\times$) over LLAE-SVD, reflecting its lighter decoder architecture. The trade-off between latency and median error for AE+SVD surrogates is presented in Figure~\ref{fig:svd_surr_latency}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_surr_latency.png}
+    \caption{AE+SVD surrogate inference benchmark (NVIDIA RTX A5000). Left: per-sample latency across checkpoints. Right: accuracy--latency scatter representing median $L^2$ error vs.\ latency.}
+    \label{fig:svd_surr_latency}
+\end{figure}
+\subsection{Tucker surrogate performance}
+
+\subsection{Optimal laplace contour choice}
+
 \section{Comparison and Discussion}
+\subsection{Global synthesis}
+\subsection{SLAE vs LLAE: a trade-off between speed and accuracy}
+\subsection{The importance of choosing an optimal Laplace contour}
+\subsection{Discussion and perspectives}
 
 
+\newpage
 \begin{appendices}
 \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
 
+\clearpage
 \section{Per-Checkpoint Error Distributions}
 \label{app:histograms}
 
-Figure~\ref{fig:ae_histograms} shows the distribution of relative $L^2$ errors across the 1620 test simulations for each of the 14 AE checkpoints evaluated in Section~\ref{sec:ae_perf}. Dashed lines indicate the median (black) and mean (orange); the dotted red line marks the 90th percentile.
+\paragraph{SVD reconstruction.} Figure~\ref{fig:svd_rec_histograms} shows the distribution of relative $L^2$ errors for each of the 7 SVD reconstruction configurations evaluated in Section~\ref{sec:svd_rec}.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_rec_histograms.png}
+    \caption{Per-configuration error histograms for the SVD reconstruction (test set, $n=1620$). The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
+    \label{fig:svd_rec_histograms}
+\end{figure}
+
+\paragraph{SVD surrogate.} Figure~\ref{fig:svd_surr_histograms} shows the corresponding distributions for the end-to-end SVD surrogate (Section~\ref{sec:svd_surr}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{svd_surr_histograms.png}
+    \caption{Per-configuration error histograms for the SVD surrogate (test set, $n=1620$). Same layout as Figure~\ref{fig:svd_rec_histograms}; green bars indicate surrogate predictions.}
+    \label{fig:svd_surr_histograms}
+\end{figure}
+
+\paragraph{AE checkpoints.} Figure~\ref{fig:ae_histograms} shows the distribution of relative $L^2$ errors across the 1620 test simulations for each of the 14 AE checkpoints evaluated in Section~\ref{sec:ae_perf}. Dashed lines indicate the median (black) and mean (orange); the dotted red line marks the 90th percentile.
+
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{ae_histograms_all.png}
     \caption{Per-checkpoint error histograms on the test set ($n=1620$). Each panel corresponds to one checkpoint; SLAE in blue, LLAE in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
     \label{fig:ae_histograms}
 \end{figure}
 
+\paragraph{Surrogate checkpoints.}
+Figure~\ref{fig:surr_histograms} shows the per-sample error distribution for each of the 14 direct surrogate checkpoints evaluated in Section~\ref{sec:direct_surr}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{surr_histograms.png}
+    \caption{Per-checkpoint error histograms for all 14 direct surrogate models (test set, $n=1620$). SLAE checkpoints in blue, LLAE checkpoints in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
+    \label{fig:surr_histograms}
+\end{figure}
+
+\clearpage
+\section{Surrogate Ablation Studies}
+\label{app:surr_ablation}
+
+Figures~\ref{fig:llae_surr_ablation} and~\ref{fig:slae_surr_ablation} show the effect of each hyperparameter on the end-to-end surrogate error, using violin plots of the full test-set distribution (one hyperparameter varied at a time, others fixed at the baseline values of Table~\ref{tab:ae_hparams}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{llae_surr_ablation.png}
+    \caption{LLAE surrogate ablation (test set, $n=1620$, violin plots; black line = median, dashed orange = mean). From left to right: effect of the number of Laplace frequencies $K$ ($d_z=64$, $\gamma=0.01$) and effect of the latent dimension $d_z$ ($K=16$, $\gamma=0.01$). The surrogate error varies by less than 0.5\,pp across all LLAE configurations.}
+    \label{fig:llae_surr_ablation}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{slae_surr_ablation.png}
+    \caption{SLAE surrogate ablation (test set, $n=1620$). Same layout as Figure~\ref{fig:llae_surr_ablation}. SLAE error is strongly sensitive to $K$: $K=8$ degrades to 11.6\% while $K=32$ achieves the best SLAE result (5.7\%). Note the larger $y$-axis range compared to LLAE.}
+    \label{fig:slae_surr_ablation}
+\end{figure}
+
+\clearpage
 \section{Governing Equations}
 \label{app:equations}
 
@@ -647,6 +1116,7 @@ Our neural surrogate model is designed to emulate the transient dynamics of a re
     \end{equation}
 \end{enumerate}
 
+\clearpage
 \section{Architectural Details and Setup}
 \label{app:architecture}
 
@@ -654,7 +1124,7 @@ All models were trained using the AdamW optimizer (weight decay $10^{-4}$) with 
 
 Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder architectures.
 
-\begin{table}
+\begin{table}[H]
     \centering
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{llcc}
@@ -686,7 +1156,7 @@ Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder ar
 
 Table~\ref{tab:surr_hparams} summarises the hyperparameters used for surrogate training (Phase 2).
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{llcc}
@@ -718,6 +1188,9 @@ Table~\ref{tab:surr_hparams} summarises the hyperparameters used for surrogate t
     \label{tab:surr_hparams}
 \end{table}
 
+
+
+\clearpage
 \section{Proofs for the Bias--Variance Contour Optimization}
 \label{app:bv_proof}
 
@@ -730,7 +1203,17 @@ Starting from decomposition \eqref{eq:bv_decomp} and applying the triangle inequ
 \[
     \|\bm{u}(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\| \leq \|\bm{u}(\vmu) - \bm{u}^*(\vmu)\| + \|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\|.
 \]
-The first term equals $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}(\vmu)\|$ by \eqref{eq:bias_simplified}. For the second term, $\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu) = \bm{A}^{-1}\Re(\bm{F}^H(\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)))$. Applying sub-multiplicativity of the operator norm and $\|\Re(M)\| \leq \|M\|$ yields $\|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\| \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K}$, which gives \eqref{eq:bv_bound}. \hfill$\square$
+The first term equals $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}(\vmu)\|$ by \eqref{eq:bias_simplified}. For the second term:
+\[
+    \bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)
+    = \bm{A}^{-1}\Re\!\left(\bm{F}^H\!\left(\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\right)\right).
+\]
+Applying sub-multiplicativity of the operator norm and $\|\Re(M)\| \leq \|M\|$ yields:
+\[
+    \|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\|
+    \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K},
+\]
+which gives \eqref{eq:bv_bound}. \hfill$\square$
 
 \textit{Proof} ($\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$).
 A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection~\cite{baldi1989}. Since a nonlinear autoencoder with the same bottleneck dimension optimizes over a strictly larger class of functions (which includes all linear encoder--decoder pairs), its minimum reconstruction error satisfies $\epsilon_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$, as empirically confirmed in~\cite{wang2016autoencoder}. \hfill$\square$
