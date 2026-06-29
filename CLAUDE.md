@@ -186,6 +186,37 @@ Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}.pt`
 - `SurrogateLightningModule` requires `dm.setup()` before construction.
 - `ckpt_utils.peek_ae_hparams` reads `K` from an AE checkpoint without loading model weights.
 
+## WandB — Consulter les runs
+
+Projet : `laplace-autoencoders`, entité : `keyvanattarian_x`.
+
+Pour lister les runs récents, utiliser l'outil MCP `mcp__wandb__query_wandb_tool` avec cette requête GraphQL :
+
+```graphql
+query RecentRuns($project: String!, $entity: String!) {
+  project(name: $project, entityName: $entity) {
+    runs(first: 20, order: "-createdAt") {
+      edges {
+        node {
+          id
+          displayName
+          state
+          createdAt
+          config
+          summaryMetrics
+        }
+      }
+    }
+  }
+}
+```
+
+Variables : `{"entity": "keyvanattarian_x", "project": "laplace-autoencoders"}`
+
+États possibles : `running`, `finished`, `crashed`, `failed`.
+
+Pour récupérer l'historique des métriques d'un run spécifique, utiliser `mcp__wandb__get_run_history_tool` avec l'ID court du run (8 caractères).
+
 ## Useful Commands
 
 ```bash
