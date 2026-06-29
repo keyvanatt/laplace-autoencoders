@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 
 ## Environment
 
-The project uses a local conda environment at `.conda/`. Always run scripts with:
+The project uses a `uv` virtual environment at `.venv/`. Always run scripts with:
 ```bash
-PYTHONPATH=src .conda/bin/python <script>
+PYTHONPATH=src .venv/bin/python <script>
 ```
 
 All scripts insert `src/` into `sys.path` themselves, but must be run from the repo root.
@@ -114,23 +114,23 @@ A lightweight residual UNet that corrects Gibbs-like oscillations from spectral 
 
 ```bash
 # Phase 1 — Train AE  (model= slae | llae | lslae)
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=slae training=ae
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=llae training=ae
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py model=lslae training=ae
+PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=slae training=ae
+PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=llae training=ae
+PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=lslae training=ae
 
 # Phase 2 — Train surrogate  (must match the AE used in Phase 1)
-PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae training.ae_ckpt=<ckpt>
-PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae training.ae_ckpt=<ckpt>
-PYTHONPATH=src .conda/bin/python scripts/train_surrogate.py model=lslae training=surrogate_lslae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=lslae training=surrogate_lslae training.ae_ckpt=<ckpt>
 
 # Phase 3 — Optional corrector (SLAE pipeline only)
-PYTHONPATH=src .conda/bin/python scripts/train_corrector.py training=corrector
+PYTHONPATH=src .venv/bin/python scripts/train_corrector.py training=corrector
 
 # Evaluation
-PYTHONPATH=src .conda/bin/python scripts/evaluate.py eval.ckpt_path=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/evaluate.py eval.ckpt_path=<ckpt>
 
 # Streamlit demo
-PYTHONPATH=src .conda/bin/streamlit run app/streamlit_app.py
+PYTHONPATH=src .venv/bin/streamlit run app/streamlit_app.py
 ```
 
 ## Transforms
@@ -172,10 +172,10 @@ Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}.pt`
 
 ```bash
 # Smoke tests
-PYTHONPATH=src .conda/bin/python -m pytest tests/ -q
+PYTHONPATH=src .venv/bin/python -m pytest tests/ -q
 
 # Ablation sweep on latent_dim
-PYTHONPATH=src .conda/bin/python scripts/train_ae.py --multirun model=slae model.latent_dim=16,32,64,128
+PYTHONPATH=src .venv/bin/python scripts/train_ae.py --multirun model=slae model.latent_dim=16,32,64,128
 
 # Extract plots from a notebook into article/images/
 python notebooks/extract_plots.py <notebook_stem>          # e.g. eval_checkpoints
