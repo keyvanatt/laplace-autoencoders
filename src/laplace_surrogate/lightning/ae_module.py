@@ -109,6 +109,19 @@ class AELightningModule(pl.LightningModule):
 
     # ------------------------------------------------------------------
 
+    def on_validation_epoch_end(self):
+        """Suit les pôles de Laplace appris (s_k, α_t, λ) — LLAE learnable_laplace uniquement."""
+        if self.cfg.model.name != 'llae' or not self.cfg.model.get('learnable_laplace', False):
+            return
+        if self.trainer.sanity_checking:
+            return
+        exp = getattr(self.logger, 'experiment', None)
+        if exp is None or not hasattr(exp, 'log'):
+            return
+        exp.log(self.model.laplace.log_dict(self.current_epoch), step=self.global_step)
+
+    # ------------------------------------------------------------------
+
     def configure_optimizers(self):
         cfg_t = self.cfg.training
         optimizer = torch.optim.AdamW(self.parameters(), lr=cfg_t.lr, weight_decay=1e-4)

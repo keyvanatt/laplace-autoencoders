@@ -187,6 +187,22 @@ class LearnableLaplace(nn.Module):
         plt.close(fig)
         return img
 
+    def log_dict(self, epoch: int, scatter_every: int = 10) -> dict:
+        """
+        Payload wandb : α_t, λ, liste des s_k et scatter périodique.
+        Mêmes clés que scripts/laplace_opti.py pour pouvoir superposer les courbes.
+        """
+        alpha_t = self.log_alpha_t.exp() if self.learnable else self._alpha_t_fixed
+        lam     = self.log_lam.exp()     if self.learnable else self._lam_fixed
+        payload = {
+            'params/alpha_t': float(alpha_t.detach().cpu()),
+            'params/lam':     float(lam.detach().cpu()),
+            's_points/text':  self.log_text(),
+        }
+        if epoch % scatter_every == 0:
+            payload['s_points/scatter'] = self.log_scatter(epoch)
+        return payload
+
     def log_text(self):
         """Retourne un wandb.Html listant les s_k courants."""
         import wandb
