@@ -15,8 +15,8 @@ def _strip_model_prefix(state_dict: dict) -> dict:
 def peek_ae_hparams(ae_ckpt_path: str) -> dict:
     """
     Lit les hyperparamètres structurels d'un checkpoint AE sans instancier le modèle.
-    Retourne {'K', 'gamma_init', 'optimal_laplace', 'optimal_laplace_path'}
-    — utilisé par le DataModule avant dm.setup().
+    Retourne {'K', 'gamma_init', 'optimal_laplace', 'optimal_laplace_path',
+    'learnable_laplace'} — utilisé par le DataModule avant dm.setup().
     """
     ae_ck = torch.load(ae_ckpt_path, map_location='cpu', weights_only=False)
     m_cfg = _ae_model_cfg(ae_ck)
@@ -25,7 +25,24 @@ def peek_ae_hparams(ae_ckpt_path: str) -> dict:
         'gamma_init':          float(m_cfg.get('gamma_init', 0.0)),
         'optimal_laplace':     bool(m_cfg.get('optimal_laplace', False)),
         'optimal_laplace_path': m_cfg.get('optimal_laplace_path', None),
+        'learnable_laplace':   bool(m_cfg.get('learnable_laplace', False)),
     }
+
+
+def laplace_reg(cfg) -> tuple[float, float]:
+    """
+    Retourne (alpha_t, lam) pour l'inversion de Laplace Tikhonov du surrogate.
+
+    Avec des pôles optimisés hors-ligne (`optimal_laplace`), laplace_opti.py a appris
+    s_opt, alpha_t et lam conjointement : inverser avec une autre régularisation
+    sortirait les pôles du régime pour lequel ils ont été fittés. On relit donc
+    alpha_t/lam depuis le même fichier. Sinon, on prend les valeurs de la config.
+    """
+    m_cfg = cfg.model
+    if m_cfg.get('optimal_laplace', False):
+        ck = torch.load(m_cfg.optimal_laplace_path, map_location='cpu', weights_only=False)
+        return float(ck['alpha_t']), float(ck['lam'])
+    return float(cfg.training.alpha_t), float(cfg.training.lam)
 
 
 def load_slae_from_ckpt(ae_ckpt_path: str, N: int):
@@ -66,9 +83,14 @@ def load_llae_from_ckpt(ae_ckpt_path: str, N: int, Nt: int, K: int):
     import math
     alpha_t           = float(m_cfg.get('alpha_t', math.exp(-2.0)))
     lam               = float(m_cfg.get('lam',     math.exp(-2.0)))
+    sd = _strip_model_prefix(ae_ck['state_dict'])
+    # GroupNorm par défaut, mais BatchNorm si les buffers (running_mean) sont présents
+    # dans le checkpoint — compatibilité avec les AE entraînés avant le passage en GroupNorm.
+    decoder_norm = 'bn' if any('decoder.deconv' in k and 'running_mean' in k for k in sd) else 'gn'
     ae = LLAE(N=N, Nt=Nt, latent_dim=latent_dim, K=K, dt=dt, time_L=time_L,
-              learnable_laplace=learnable_laplace, alpha_t=alpha_t, lam=lam)
-    ae.load_state_dict(_strip_model_prefix(ae_ck['state_dict']))
+              learnable_laplace=learnable_laplace, alpha_t=alpha_t, lam=lam,
+              decoder_norm=decoder_norm)
+    ae.load_state_dict(sd)
     ae.eval()
     for p in ae.parameters():
         p.requires_grad_(False)

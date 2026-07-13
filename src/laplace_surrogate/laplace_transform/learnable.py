@@ -89,14 +89,21 @@ class LearnableLaplace(nn.Module):
         return s_full, F_full, L, c_mask
 
     def _get_inv_matrices(self, device: torch.device):
+        # Pôles apprenables : A et F_full dépendent de paramètres qui bougent à chaque
+        # step, donc jamais de cache. On ne peut pas s'appuyer sur train() pour invalider :
+        # Lightning restaure le mode train sans repasser par Module.train(True), si bien
+        # qu'un cache rempli sous no_grad (sanity-check) resterait utilisé à l'entraînement
+        # et couperait le gradient vers s_re/s_im/log_alpha_t/log_lam.
+        if self.learnable:
+            return self._build_inv_matrices(device)
+
         if self._eval_cache is not None:
             cached = self._eval_cache
             if cached[0].device != device:
                 self._eval_cache = tuple(x.to(device) for x in cached)
             return self._eval_cache
         matrices = self._build_inv_matrices(device)
-        if not self.learnable or not self.training:
-            self._eval_cache = matrices
+        self._eval_cache = matrices
         return matrices
 
     def _get_F_fwd(self, Nt: int, device: torch.device) -> torch.Tensor:
