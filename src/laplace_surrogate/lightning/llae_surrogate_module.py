@@ -84,6 +84,17 @@ class LLAESurrogateLightningModule(pl.LightningModule):
         self.log('val/l2rel', l2rel,           on_epoch=True, prog_bar=True)
         return loss
 
+    def on_validation_epoch_end(self):
+        """Suit les pôles raffinés en phase 2 (s_k, α_t, λ) — learnable_laplace uniquement."""
+        if not self.model.learnable_laplace or self.trainer.sanity_checking:
+            return
+        exp = getattr(self.logger, 'experiment', None)
+        if exp is None or not hasattr(exp, 'log'):
+            return
+        exp.log(self.model.laplace.log_dict(self.current_epoch), step=self.global_step)
+
+    # ------------------------------------------------------------------
+
     def configure_optimizers(self):
         cfg_t = self.cfg.training
         param_groups = [{'params': self.model.surrogate.parameters(), 'lr': cfg_t.lr_surrogate}]
