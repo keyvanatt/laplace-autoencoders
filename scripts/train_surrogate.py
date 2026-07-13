@@ -83,6 +83,10 @@ def main(cfg: DictConfig):
         if ae_hparams['optimal_laplace']:
             cfg.model.optimal_laplace      = True
             cfg.model.optimal_laplace_path = ae_hparams['optimal_laplace_path']
+        # Idem pour les pôles apprenables : si l'AE est un _ll, le surrogate
+        # continue par défaut à raffiner les pôles (hérités et déjà optimisés).
+        if ae_hparams['learnable_laplace']:
+            cfg.model.learnable_laplace = True
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()
