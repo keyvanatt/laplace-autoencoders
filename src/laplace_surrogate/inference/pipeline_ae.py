@@ -12,6 +12,9 @@ Supporte LLAE et SLAE.
 """
 from __future__ import annotations
 
+import os
+import warnings
+
 import numpy as np
 import torch
 
@@ -182,9 +185,24 @@ class InferencePipelineAE:
         K       = cfg.model.K
         dt      = cfg.data.dt
         rule    = cfg.data.rule
-        # alpha_t et lam absents du config SLAE — valeurs par défaut
+        # alpha_t / lam pour l'inversion Tikhonov — DOIVENT correspondre au contour.
+        # Pour un contour optimisé offline (_ol), les pôles ont été optimisés
+        # CONJOINTEMENT avec (alpha_t, lam), stockés dans optimal_laplace_path.
+        # Les réutiliser : sinon on inverse un contour taillé pour un ridge lourd
+        # avec un ridge quasi nul → système mal conditionné → erreur explosée.
         alpha_t = float(getattr(cfg.model, 'alpha_t', 0.0))
         lam     = float(getattr(cfg.model, 'lam',     1e-6))
+        if getattr(cfg.model, 'optimal_laplace', False):
+            opt_path = getattr(cfg.model, 'optimal_laplace_path', None)
+            if opt_path and os.path.exists(opt_path):
+                _opt    = torch.load(opt_path, map_location='cpu', weights_only=False)
+                alpha_t = float(_opt['alpha_t'])
+                lam     = float(_opt['lam'])
+            else:
+                warnings.warn(
+                    f"optimal_laplace=True mais optimal_laplace_path introuvable "
+                    f"({opt_path!r}) — inversion avec alpha_t={alpha_t}, lam={lam}."
+                )
         s_t     = torch.tensor(self._s_list, dtype=torch.complex128)
         freq_ratios = [k / max(K - 1, 1) for k in range(K)]
 
