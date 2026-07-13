@@ -101,7 +101,10 @@ class LLAESVDModel(nn.Module):
         self.theta_std.copy_( _t(theta_std))
 
     def load_ae_decoder(self, ae):
-        """Copie les poids du décodeur depuis un LLAE entraîné."""
+        """Copie les poids du décodeur depuis un LLAE entraîné (norm BN/GN auto)."""
+        if ae.decoder.norm != self.decoder.norm:
+            self.decoder = ConvDecoder(out_channels=1, N=self.N, latent_dim=self.latent_dim,
+                                       cond_L=self.decoder.cond_enc.L, norm=ae.decoder.norm)
         self.decoder.load_state_dict(ae.decoder.state_dict())
 
     def load_laplace_from_ae(self, ae):

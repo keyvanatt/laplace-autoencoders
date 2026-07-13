@@ -154,6 +154,18 @@ class InferencePipeline:
 # Construction du modèle depuis le checkpoint
 # ---------------------------------------------------------------------------
 
+def _decoder_norm_from_ckpt(ckpt: dict) -> str:
+    """
+    Déduit la normalisation du décodeur ('bn' / 'gn') depuis les poids sauvegardés.
+
+    Le décodeur est copié depuis l'AE de phase 1, dont la norme n'est pas
+    enregistrée dans le checkpoint du surrogate. Seul BatchNorm expose des
+    buffers `running_mean`.
+    """
+    state = ckpt.get('model_state') or ckpt.get('state_dict', {})
+    return 'bn' if any(k.endswith('running_mean') for k in state) else 'gn'
+
+
 def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.Module:
     if model_type == 'SLAEModel':
         from laplace_surrogate.models.slae_surrogate import SLAEModel
@@ -249,6 +261,7 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             n_trunk    = ckpt['n_trunk'],
             n_head     = ckpt['n_head'],
             freq_L     = ckpt['freq_L'],
+            norm       = _decoder_norm_from_ckpt(ckpt),
         ).to(device)
 
     elif model_type == 'SLAETuckerModel':
