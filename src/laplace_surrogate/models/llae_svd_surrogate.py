@@ -53,6 +53,7 @@ class LLAESVDModel(nn.Module):
         n_trunk    : int   = 4,
         n_head     : int   = 2,
         freq_L     : int   = 6,
+        norm       : str   = 'gn',
     ):
         super().__init__()
         self.N          = N
@@ -82,7 +83,8 @@ class LLAESVDModel(nn.Module):
             hidden_dim=hidden_dim, head_dim=head_dim,
             n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
-        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
+        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L,
+                                   norm=norm)
 
     # ------------------------------------------------------------------
 

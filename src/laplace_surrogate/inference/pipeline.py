@@ -194,6 +194,7 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             N=ckpt['N'], Nt=ckpt['Nt'], latent_dim=ckpt['latent_dim'], K=ckpt['K'],
             dt=ckpt['dt'], time_L=ckpt.get('time_L', 8),
             learnable_laplace=learnable_laplace, alpha_t=alpha_t, lam=lam,
+            decoder_norm=_decoder_norm_from_ckpt(ckpt),
         ).to(device)
         hidden_dim = ckpt.get('hidden_dim') or ckpt.get('shared_dim', 256)
         return LLAEModel(
@@ -220,6 +221,7 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             n_trunk    = ckpt['n_trunk'],
             n_head     = ckpt['n_head'],
             freq_L     = ckpt['freq_L'],
+            norm       = _decoder_norm_from_ckpt(ckpt),
         ).to(device)
 
     elif model_type == 'SLAESVDModel':
