@@ -20,7 +20,7 @@ class SLAESurrogateLightningModule(pl.LightningModule):
         self.model = self._build_model(datamodule)
 
     def _build_model(self, dm):
-        from laplace_surrogate.lightning.ckpt_utils import load_slae_from_ckpt
+        from laplace_surrogate.lightning.ckpt_utils import load_slae_from_ckpt, laplace_reg
         from laplace_surrogate.models.slae_surrogate import SLAEModel
 
         cfg_t = self.cfg.training
@@ -33,6 +33,7 @@ class SLAESurrogateLightningModule(pl.LightningModule):
         theta_dim = ds.theta_dim
 
         ae, latent_dim, freq_L = load_slae_from_ckpt(cfg_t.ae_ckpt, N)
+        self._alpha_t, self._lam = laplace_reg(self.cfg)
 
         model = SLAEModel.from_ae(
             ae, latent_dim=latent_dim, freq_L=freq_L,
@@ -43,8 +44,8 @@ class SLAESurrogateLightningModule(pl.LightningModule):
             n_head=cfg_t.n_head,
             surr_freq_L=cfg_t.freq_L,
             dt=cfg_d.dt,
-            alpha_t=cfg_t.alpha_t,
-            lam=cfg_t.lam,
+            alpha_t=self._alpha_t,
+            lam=self._lam,
         )
         model.U_mean.copy_(torch.tensor(ds.U_mean, dtype=torch.float32))
         model.U_std.copy_( torch.tensor(ds.U_std,  dtype=torch.float32))
@@ -134,8 +135,8 @@ class SLAESurrogateLightningModule(pl.LightningModule):
             'freq_L':      m.freq_L,
             'surr_freq_L': m.surr_freq_L,
             'dt':          self.cfg.data.dt,
-            'alpha_t':     self.cfg.training.alpha_t,
-            'lam':         self.cfg.training.lam,
+            'alpha_t':     self._alpha_t,
+            'lam':         self._lam,
             'theta_mean':  ds.theta_mean,
             'theta_std':   ds.theta_std,
             'test_idx':    np.asarray(dm.test_idx),

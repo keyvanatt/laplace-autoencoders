@@ -59,7 +59,11 @@ class LLAEModel(nn.Module):
             hidden_dim=hidden_dim, head_dim=head_dim,
             n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
+        # load_llae_from_ckpt gèle tout l'AE : il faut redégeler le décodeur, qui est
+        # entraînable ici (sinon lr_decoder est sans effet et il reste figé en phase 1).
         self.decoder = copy.deepcopy(ae.decoder)
+        for p in self.decoder.parameters():
+            p.requires_grad_(True)
         self.encoder = _freeze(copy.deepcopy(ae.encoder))
         self.laplace = copy.deepcopy(ae.laplace)
         if learnable_laplace:
