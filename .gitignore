@@ -2,6 +2,7 @@ __pycache__
 .conda
 wandb
 notebooks/cache*
+remote/
 
 # Checkpoints are stored on Hugging Face, not in git
 # Download: hf download keyvanatt/laplace-autoencoders-checkpoints --local-dir checkpoints
