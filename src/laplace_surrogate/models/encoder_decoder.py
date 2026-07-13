@@ -20,6 +20,15 @@ def _to_f_vec(freq_ratio, B: int, dtype, device) -> torch.Tensor:
     return freq_ratio.to(dtype=dtype, device=device).view(B, 1)
 
 
+def _make_norm(norm: str, num_channels: int) -> nn.Module:
+    """Couche de normalisation pour les blocs deconv ('gn' GroupNorm, 'bn' BatchNorm)."""
+    if norm == 'gn':
+        return nn.GroupNorm(8, num_channels)
+    if norm == 'bn':
+        return nn.BatchNorm2d(num_channels)
+    raise ValueError(f"norm inconnue: {norm!r} (attendu 'gn' ou 'bn')")
+
+
 class SinusoidalFreqEncoding(nn.Module):
     """
     Encode un scalaire f ∈ [0, 1] en un vecteur de dimension 2·L via un
@@ -100,17 +109,19 @@ class ConvDecoder(nn.Module):
     N doit être multiple de 8.
     """
 
-    def __init__(self, out_channels: int, N: int, latent_dim: int, cond_L: int = 8):
+    def __init__(self, out_channels: int, N: int, latent_dim: int, cond_L: int = 8,
+                 norm: str = 'gn'):
         super().__init__()
+        self.norm = norm
         self.base = N // 8
         self.fc = nn.Sequential(nn.Linear(latent_dim, 64 * self.base ** 2), nn.ReLU())
         self.cond_enc = SinusoidalFreqEncoding(L=cond_L, hidden_dim=64, out_dim=64)
         self.film1 = nn.Linear(64, 2 * 64)
         self.film2 = nn.Linear(64, 2 * 32)
         self.film3 = nn.Linear(64, 2 * 16)
-        self.deconv1 = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1), nn.GroupNorm(8, 64), nn.ReLU())
-        self.deconv2 = nn.Sequential(nn.ConvTranspose2d(64, 32, 4, 2, 1), nn.GroupNorm(8, 32), nn.ReLU())
-        self.deconv3 = nn.Sequential(nn.ConvTranspose2d(32, 16, 4, 2, 1), nn.GroupNorm(8, 16), nn.ReLU())
+        self.deconv1 = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1), _make_norm(norm, 64), nn.ReLU())
+        self.deconv2 = nn.Sequential(nn.ConvTranspose2d(64, 32, 4, 2, 1), _make_norm(norm, 32), nn.ReLU())
+        self.deconv3 = nn.Sequential(nn.ConvTranspose2d(32, 16, 4, 2, 1), _make_norm(norm, 16), nn.ReLU())
         self.heads = nn.ModuleList([self._make_head() for _ in range(out_channels)])
 
     @staticmethod

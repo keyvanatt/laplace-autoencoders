@@ -63,6 +63,7 @@ class LLAETuckerModel(nn.Module):
         n_trunk    : int   = 4,
         n_head     : int   = 2,
         freq_L     : int   = 6,
+        norm       : str   = 'gn',
     ):
         super().__init__()
         self.N          = N
@@ -95,7 +96,8 @@ class LLAETuckerModel(nn.Module):
             hidden_dim=hidden_dim, head_dim=head_dim,
             n_trunk=n_trunk, n_head=n_head, freq_L=freq_L,
         )
-        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
+        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L,
+                                   norm=norm)
 
     # ------------------------------------------------------------------
 
@@ -115,7 +117,10 @@ class LLAETuckerModel(nn.Module):
         self.theta_std.copy_( _t(theta_std))
 
     def load_ae_decoder(self, ae):
-        """Copie les poids du décodeur depuis un LLAE entraîné."""
+        """Copie les poids du décodeur depuis un LLAE entraîné (norm BN/GN auto)."""
+        if ae.decoder.norm != self.decoder.norm:
+            self.decoder = ConvDecoder(out_channels=1, N=self.N, latent_dim=self.latent_dim,
+                                       cond_L=self.decoder.cond_enc.L, norm=ae.decoder.norm)
         self.decoder.load_state_dict(ae.decoder.state_dict())
 
     def load_laplace_from_ae(self, ae):

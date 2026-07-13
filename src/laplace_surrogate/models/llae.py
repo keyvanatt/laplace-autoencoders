@@ -49,6 +49,7 @@ class LLAE(BaseAutoEncoder):
         learnable_laplace    : bool  = False,
         alpha_t              : float = math.exp(-2.0),
         lam                  : float = math.exp(-2.0),
+        decoder_norm         : str   = 'gn',
     ):
         super().__init__()
         self.latent_dim  = latent_dim
@@ -57,7 +58,8 @@ class LLAE(BaseAutoEncoder):
         self.beta_latent = beta_latent
 
         self.encoder = ConvEncoder(in_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
-        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L)
+        self.decoder = ConvDecoder(out_channels=1, N=N, latent_dim=latent_dim, cond_L=time_L,
+                                   norm=decoder_norm)
         self.laplace  = LearnableLaplace(K, dt, Nt, gamma_init, learnable=learnable_laplace,
                                          alpha_t=alpha_t, lam=lam)
 
