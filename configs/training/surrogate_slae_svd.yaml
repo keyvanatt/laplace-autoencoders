@@ -1,5 +1,6 @@
 # Hyperparamètres pour le surrogate SVD-SLAE (train_surrogate.py model=slae training=surrogate_slae_svd)
-# SVD tronquée sur les latents Laplace z_k avant la prédiction par le surrogate.
+# SVD reelle tronquee du mode latent des latents Laplace z_k (reels pour SLAE).
+# Base V FIGEE : c'est le cas r_s = K de surrogate_slae_tucker.
 defaults:
   - surrogate_arch
 
@@ -7,7 +8,6 @@ epochs: 300
 batch_size: 16
 lr_surrogate: 5.0e-4
 lr_decoder:   5.0e-5
-lr_V:         5.0e-4
 patience: 40
 
 # Nombre de modes SVD retenus pour la compression des latents Laplace

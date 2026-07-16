@@ -70,7 +70,9 @@ class SLAESVDModel(nn.Module):
         self.freq_L      = freq_L
         self.surr_freq_L = surr_freq_L
 
-        self.V = nn.Parameter(torch.zeros(latent_dim, k_svd))
+        # Base SVD réelle FIGÉE (les latents SLAE sont réels). Cas r_s = K de Tucker :
+        # seul le mode latent est compressé, le mode fréquence est laissé intact.
+        self.register_buffer('V', torch.zeros(latent_dim, k_svd))
 
         self.register_buffer('G_mean',   torch.zeros(K, k_svd))
         self.register_buffer('G_std',    torch.ones( K, k_svd))
@@ -172,7 +174,7 @@ class SLAESVDModel(nn.Module):
         U_pred_norm, G_k_norm = self._forward_train(theta_norm)
         z_true = self._encode_targets(U_norm)
         with torch.no_grad():
-            G_true      = z_true.float() @ self.V.detach()
+            G_true      = z_true.float() @ self.V
             G_true_norm = (G_true - self.G_mean) / self.G_std
         return U_pred_norm, G_k_norm, G_true_norm
 

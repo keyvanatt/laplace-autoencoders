@@ -1,16 +1,30 @@
 """
 llae_svd_surrogate.py — SVD Surrogate LLAE : θ → Ĝ_SVD → z(t) → U(t).
 
-Variante surrogate du pipeline LLAE avec compression SVD des latents temporels.
+Variante surrogate du pipeline LLAE avec compression SVD des latents de Laplace.
 Ce n'est pas un AE indépendant : il réutilise l'encodeur et le décodeur d'un LLAE
-pré-entraîné, et ajoute une base SVD apprise V [D, k_svd].
+pré-entraîné, et ajoute une base SVD complexe FIGÉE V [D, k_svd].
 
 Pipeline (phase 2 offline) :
   z(t) = encoder_LLAE(U(t))          [ns, Nt, D]
-  SVD tronquée sur z_train → V       [D, k_svd]
-  G(t) = z(t) @ V                    [ns, Nt, k_svd]
-  Ĝ(s_k) = Laplace(G(t))            [ns, K, k_svd] complexe
+  ẑ(s_k) = Laplace(z(t))            [ns, K, D] complexe
+  SVD complexe tronquée du dépliage mode-latent de ẑ → V [D, k_svd] (figée)
+  Ĝ(s_k) = ẑ(s_k) @ V               [ns, K, k_svd] complexe
   stats(Ĝ) → G_hat_mean, G_hat_std   [K, k_svd, 2]
+
+Pipeline (entraînement) :
+  θ → FreqSurrogate → Ĝ_norm [B, K, k_svd, 2]
+  → dénorm → Ĝ [B, K, k_svd] complexe
+  → @ V^H → ẑ(s_k) [B, K, D] complexe
+  → Laplace⁻¹ → z̃(t) [B, Nt, D]
+  → ConvDecoder → Û(t) [B, Nt, N, N]
+
+C'est exactement le cas r_s = K de LLAE-Tucker : à r_s = K le facteur fréquence
+U_s est unitaire (U_s U_sᴴ = I), le mode fréquence n'est donc pas compressé et il
+ne reste que le facteur latent, ici V ≡ U_z. Mêmes conventions que tucker.py :
+projection G = ẑ V, reconstruction ẑ = G Vᴴ. V étant complexe, elle ne commute
+pas avec L⁻¹ (l'inverse de Tikhonov est ℝ-linéaire) : la rétro-projection
+précède nécessairement l'inversion.
 
 Pipeline (entraînement) :
   θ → FreqSurrogate → Ĝ_norm [B, K, k_svd, 2]
@@ -69,7 +83,9 @@ class LLAESVDModel(nn.Module):
 
         self.laplace = LearnableLaplace(K, dt, Nt, learnable=False)
 
-        self.V = nn.Parameter(torch.zeros(latent_dim, k_svd))
+        # Base SVD complexe FIGÉE (calculée offline). Cas r_s = K de Tucker :
+        # seul le mode latent est compressé, le mode fréquence est laissé intact.
+        self.register_buffer('V', torch.zeros(latent_dim, k_svd, dtype=torch.cfloat))
 
         self.register_buffer('G_hat_mean', torch.zeros(K, k_svd, 2))
         self.register_buffer('G_hat_std',  torch.ones( K, k_svd, 2))
@@ -89,8 +105,10 @@ class LLAESVDModel(nn.Module):
     # ------------------------------------------------------------------
 
     def set_svd_basis(self, V: torch.Tensor):
+        if not isinstance(V, torch.Tensor):
+            V = torch.tensor(V)
         with torch.no_grad():
-            self.V.copy_(V.float() if isinstance(V, torch.Tensor) else torch.tensor(V, dtype=torch.float32))
+            self.V.copy_(V.to(torch.cfloat))
 
     def set_normalization(self, G_hat_mean, G_hat_std, U_mean, U_std, theta_mean, theta_std):
         def _t(x):
@@ -137,8 +155,9 @@ class LLAESVDModel(nn.Module):
         G_hat_norm = self.surrogate(theta_norm).view(B, self.K, self.k_svd, 2)
         G_hat_ri   = G_hat_norm * self.G_hat_std + self.G_hat_mean
         G_hat_phys = torch.complex(G_hat_ri[..., 0], G_hat_ri[..., 1])
-        G_tilde    = self.laplace.inverse_transform(G_hat_phys, self.Nt)
-        z_tilde    = G_tilde @ self.V.T
+        # V complexe ne commute pas avec L⁻¹ : rétro-projeter AVANT l'inversion.
+        z_hat      = G_hat_phys @ self.V.conj().T                # (B, K, latent_dim)
+        z_tilde    = self.laplace.inverse_transform(z_hat, self.Nt)
         U_pred     = self._decode_seq(z_tilde)
         return U_pred, G_hat_norm
 
@@ -153,8 +172,8 @@ class LLAESVDModel(nn.Module):
         U_pred, G_hat_norm = self._predict_and_reconstruct(theta_norm)
 
         with torch.no_grad():
-            G_true          = z_true.float() @ self.V.detach()
-            G_hat_true      = self.laplace.forward_transform(G_true)
+            z_hat_true      = self.laplace.forward_transform(z_true.float())   # (B, K, latent_dim)
+            G_hat_true      = z_hat_true @ self.V                              # (B, K, k_svd)
             G_hat_true_ri   = torch.stack([G_hat_true.real, G_hat_true.imag], dim=-1)
             G_hat_true_norm = (G_hat_true_ri - self.G_hat_mean) / self.G_hat_std
 
