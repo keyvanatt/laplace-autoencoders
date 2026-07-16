@@ -1,0 +1,12 @@
+# Hyperparamètres pour la phase surrogate DL-ROM (train_surrogate.py model=dlrom training=surrogate_dlrom)
+defaults:
+  - surrogate_arch
+
+epochs: 300
+batch_size: 16
+lr_surrogate: 3.0e-4
+lr_decoder: 5.0e-5
+patience: 40
+
+# Checkpoint AE DL-ROM à charger
+ae_ckpt: checkpoints/dlrom_ld64.pt

@@ -44,11 +44,15 @@ src/laplace_surrogate/
   inference/          pipeline.py (InferencePipeline.from_checkpoint)
   utils/              visualization.py, rotate.py, make_split.py
 
+src/dl_rom/           DL-ROM baseline (Fresca) — no Laplace transform
+  dlrom_ae.py, dlrom_surrogate.py, ae_module.py,
+  surrogate_module.py, ckpt_utils.py
+
 configs/
   config.yaml         (Hydra root — default: model=llae, training=surrogate_llae)
-  model/              slae.yaml, llae.yaml, lslae.yaml
+  model/              slae.yaml, llae.yaml, lslae.yaml, dlrom.yaml
   training/           ae.yaml, surrogate_slae.yaml, surrogate_llae.yaml,
-                      surrogate_lslae.yaml, corrector.yaml
+                      surrogate_lslae.yaml, surrogate_dlrom.yaml, corrector.yaml
   data/               combustion.yaml
   eval/               default.yaml
 
@@ -108,6 +112,26 @@ LSLAE reuses a pre-trained LLAE encoder/decoder and adds an offline SVD projecti
 - SVD basis `V` is computed offline from the LLAE latent sequences before training
 - Surrogate module: `LSLAESurrogateLightningModule` (`lslae_surrogate_module.py`)
 
+### DL-ROM — Baseline without Laplace (`src/dl_rom/`)
+
+Comparison baseline for the article (Fresca, Dedè, Manzoni 2021). Reuses the exact same
+building blocks as LLAE — `ConvEncoder`/`ConvDecoder` with FiLM time conditioning and
+`FreqSurrogate` — but removes the Laplace transform entirely.
+
+- Classes: `src/dl_rom/dlrom_ae.py` → `DLROMAE`, `src/dl_rom/dlrom_surrogate.py` → `DLROMModel`
+- AE data flow: `U(t) → Encoder → z(t) → Decoder → Û_rec(t)` (frame-wise, no Laplace roundtrip)
+- Surrogate: `FreqSurrogate` with `K = Nt = 150` heads (one per time step, conditioned on
+  `t/(Nt-1)`) predicting `z(t)` directly — vs `K = 16` frequency heads for LLAE
+- Same two-phase training, same losses (latent + spatial), same entry points
+  (`train_ae.py model=dlrom training=ae`, `train_surrogate.py model=dlrom training=surrogate_dlrom`)
+- **Temporal-resolution sweep** (`data.t_stride=k`): uniform time subsampling —
+  `Nt → ceil(150/k)`, `dt → k·dt`, total horizon `T` constant. Used to show DL-ROM cost/error
+  scaling with `Nt` while Laplace pipelines stay at `K=16`. DL-ROM only for now (the datamodule
+  raises for other models). The AE tag gets a `_ts{k}` suffix (`dlrom_ld64_ts2`), phase 2
+  inherits `t_stride` from the AE checkpoint automatically, and `evaluate.py` compares against
+  ground truth subsampled on the same grid (`t_stride` is stored in the surrogate checkpoint).
+  Example sweep: `for k in 1 2 3 5 10; do ... train_ae.py model=dlrom training=ae data.t_stride=$k; done`
+
 ## Surrogate Training (Phase 2)
 
 The surrogate predicts Laplace-domain latents from `θ`, then uses the frozen decoder and inverse transform to recover the full transient field.
@@ -135,11 +159,13 @@ A lightweight residual UNet that corrects Gibbs-like oscillations from spectral 
 PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=slae training=ae
 PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=llae training=ae
 PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=lslae training=ae
+PYTHONPATH=src .venv/bin/python scripts/train_ae.py model=dlrom training=ae   # baseline sans Laplace
 
 # Phase 2 — Train surrogate  (must match the AE used in Phase 1)
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=slae training=surrogate_slae training.ae_ckpt=<ckpt>
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=llae training=surrogate_llae training.ae_ckpt=<ckpt>
 PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=lslae training=surrogate_lslae training.ae_ckpt=<ckpt>
+PYTHONPATH=src .venv/bin/python scripts/train_surrogate.py model=dlrom training=surrogate_dlrom training.ae_ckpt=<ckpt>
 
 # Phase 2 variants — SVD compression (single latent mode) or Tucker compression
 # (joint frequency+latent modes, frozen HOOI factors). Dispatch is automatic:
@@ -177,7 +203,7 @@ pipe = InferencePipeline.from_checkpoint('checkpoints/SLAEModel__slae_ld64_K16_g
 U_pred = pipe.predict([[k, A, C]])  # (B, Nt, N, N) float32
 ```
 
-`InferencePipeline.from_checkpoint` reads `model_type` from the checkpoint and handles `θ` normalization automatically. Supported backends: `SLAEModel`, `LLAEModel`, `SLAESVDModel`, `LLAESVDModel`, `SLAETuckerModel`, `LLAETuckerModel`, `CorrectionAE`.
+`InferencePipeline.from_checkpoint` reads `model_type` from the checkpoint and handles `θ` normalization automatically. Supported backends: `SLAEModel`, `LLAEModel`, `SLAESVDModel`, `LLAESVDModel`, `SLAETuckerModel`, `LLAETuckerModel`, `DLROMModel`, `CorrectionAE`.
 
 ## Checkpoint Naming Convention
 
@@ -185,6 +211,7 @@ AE checkpoints are saved as `{ae_tag}.pt` where `ae_tag` encodes key hyperparame
 - SLAE: `slae_ld{latent_dim}_K{K}_g{gamma_init}[_ll][_ol]`
 - LLAE: `llae_ld{latent_dim}_K{K}_g{gamma_init}[_ll]`
 - LSLAE: `lslae_ld{latent_dim}_K{K}_ksvd{k_svd}[_ll]`
+- DL-ROM: `dlrom_ld{latent_dim}`
 
 Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}[_ksvd{k_svd}|_rs{r_s}rz{r_z}].pt`
 - direct : `t{n_trunk}h{n_head}`

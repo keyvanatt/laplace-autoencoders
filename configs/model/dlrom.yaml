@@ -1,0 +1,9 @@
+name: dlrom
+
+# Baseline DL-ROM (Fresca) — mêmes ConvEncoder/ConvDecoder et même latent que le LLAE,
+# mais sans transformée de Laplace : reconstruction frame par frame sur Nt=150 pas de temps.
+N: 128
+Nt: 150
+latent_dim: 64
+beta: 1.0e-2     # ridge sur z (même valeur que llae)
+time_L: 8        # niveaux FiLM pour le conditionnement temporel (même valeur que llae)

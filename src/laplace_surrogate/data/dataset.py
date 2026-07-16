@@ -27,6 +27,12 @@ class TransientDataset(Dataset):
                              __getitem__ retourne (theta_norm, U_laplace_norm)
                              où U_laplace_norm a la forme (K, 2, N, N).
 
+    Sous-échantillonnage temporel
+    -----------------------------
+    t_stride > 1 : garde un pas de temps sur t_stride (grille uniforme, T constant).
+                   Nt devient ceil(Nt/t_stride) et dt devient dt*t_stride.
+                   Non supporté avec laplace=True pour le moment.
+
     Usage
     -----
     dataset = TransientDataset('dataset/ch4_rotated.npy', dt=1.0, laplace=True, s_list=s)
@@ -37,7 +43,9 @@ class TransientDataset(Dataset):
     def __init__(self, data_path: str, laplace: bool = False,
                  s_list=None, rule: str = 'trap', dt: float = 1.0,
                  doe_path: str | None = None, interp_size: int | None = None,
-                 cache_dir: str = '/Data/KAT', ns_max: int | None = None):
+                 cache_dir: str = '/Data/KAT', ns_max: int | None = None,
+                 t_stride: int = 1):
+        self.t_stride = int(t_stride)
         if data_path.endswith('.npy'):
             U_raw = np.load(data_path, mmap_mode='r')
             if doe_path is None:
@@ -48,9 +56,9 @@ class TransientDataset(Dataset):
                 U_raw    = U_raw[:ns_max]
                 theta_np = theta_np[:ns_max]
             self.theta = torch.tensor(theta_np, dtype=torch.float32)
-            self.dt    = dt
+            self.dt    = dt * self.t_stride
             ns, Nt, H, W = U_raw.shape
-            self.ns, self.Nt = ns, Nt
+            self.ns, self.Nt = ns, len(range(0, Nt, self.t_stride))
             self.N = interp_size if interp_size is not None else H
             self._U_raw     = U_raw
             self.U = U_raw
@@ -59,9 +67,12 @@ class TransientDataset(Dataset):
         else:
             data   = np.load(data_path)
             self.U = torch.tensor(data['U'],     dtype=torch.float32)
+            if self.t_stride > 1:
+                self.U = self.U[:, ::self.t_stride]
             self.theta = torch.tensor(data['theta'], dtype=torch.float32)
             dt_raw     = data['dt']
-            self.dt    = float(dt_raw[0]) if hasattr(dt_raw, '__len__') else float(dt_raw)
+            self.dt    = (float(dt_raw[0]) if hasattr(dt_raw, '__len__') else float(dt_raw)) \
+                         * self.t_stride
             self.ns, self.Nt, self.N, _ = self.U.shape
             self._U_raw: np.ndarray | None = None
 
@@ -70,6 +81,11 @@ class TransientDataset(Dataset):
 
         self.laplace = laplace
         if laplace:
+            if self.t_stride > 1:
+                raise NotImplementedError(
+                    "t_stride > 1 n'est pas supporté avec laplace=True pour le moment "
+                    "(cache Laplace non différencié par stride)."
+                )
             if s_list is None:
                 raise ValueError("s_list est requis quand laplace=True")
             s_list = np.asarray(s_list, dtype=np.complex128)
@@ -129,8 +145,8 @@ class TransientDataset(Dataset):
             self._compute_laplace(idx)
 
     def _load_u(self, i: int) -> np.ndarray:
-        """Charge la simulation i, interpole si besoin, retourne (Nt, N, N) float32."""
-        u = self._U_raw[i].astype(np.float32)   # (Nt, H, W)
+        """Charge la simulation i, sous-échantillonne et interpole si besoin, retourne (Nt, N, N) float32."""
+        u = self._U_raw[i][::self.t_stride].astype(np.float32)   # (Nt, H, W)
         if self.interp_size is not None and u.shape[-1] != self.interp_size:
             u_t = torch.from_numpy(u).unsqueeze(1)  # (Nt, 1, H, W)
             u_t = F.interpolate(u_t, size=(self.interp_size, self.interp_size), mode='bilinear', align_corners=False)

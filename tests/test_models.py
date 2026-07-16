@@ -87,6 +87,63 @@ def test_slae_model_generate_shape():
 
 
 # ---------------------------------------------------------------------------
+# DL-ROM (baseline sans Laplace)
+# ---------------------------------------------------------------------------
+
+def test_dlrom_ae_forward_shape():
+    from dl_rom.dlrom_ae import DLROMAE
+    model = DLROMAE(N=N, Nt=Nt, latent_dim=LD)
+    u     = torch.randn(B, Nt, N, N)
+    U_rec, z = model(u)
+    assert U_rec.shape == (B, Nt, N, N)
+    assert z.shape == (B, Nt, LD)
+
+
+def test_dlrom_ae_loss():
+    from dl_rom.dlrom_ae import DLROMAE
+    model = DLROMAE(N=N, Nt=Nt, latent_dim=LD)
+    u     = torch.randn(B, Nt, N, N)
+    U_rec, z = model(u)
+    loss, metrics = model.loss(u, U_rec, z)
+    assert loss.ndim == 0
+    assert isinstance(metrics, dict)
+    assert 'recon' in metrics
+
+
+def test_dlrom_model_forward_and_generate():
+    from dl_rom.dlrom_ae import DLROMAE
+    from dl_rom.dlrom_surrogate import DLROMModel
+    ae    = DLROMAE(N=N, Nt=Nt, latent_dim=LD)
+    model = DLROMModel(ae, theta_dim=TDIM, hidden_dim=32, head_dim=16,
+                       n_trunk=2, n_head=2, freq_L=4)
+    theta = torch.zeros(B, TDIM)
+    u     = torch.randn(B, Nt, N, N)
+
+    U_rec, z_pred, z_true = model(theta, u)
+    assert U_rec.shape  == (B, Nt, N, N)
+    assert z_pred.shape == (B, Nt, LD)
+    assert z_true.shape == (B, Nt, LD)
+
+    loss, metrics = model.loss(u, U_rec, z_pred, z_true)
+    assert loss.ndim == 0
+    assert 'lat' in metrics and 'spat' in metrics
+
+    U_gen = model.generate(theta)
+    assert U_gen.shape == (B, Nt, N, N)
+
+
+def test_dlrom_model_encoder_frozen():
+    from dl_rom.dlrom_ae import DLROMAE
+    from dl_rom.dlrom_surrogate import DLROMModel
+    ae    = DLROMAE(N=N, Nt=Nt, latent_dim=LD)
+    model = DLROMModel(ae, theta_dim=TDIM, hidden_dim=32, head_dim=16,
+                       n_trunk=2, n_head=2, freq_L=4)
+    assert all(not p.requires_grad for p in model.encoder.parameters())
+    assert all(p.requires_grad for p in model.decoder.parameters())
+    assert all(p.requires_grad for p in model.surrogate.parameters())
+
+
+# ---------------------------------------------------------------------------
 # CorrectionAE
 # ---------------------------------------------------------------------------
 
