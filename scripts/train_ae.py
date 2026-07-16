@@ -27,7 +27,8 @@ def _ae_tag(cfg_m) -> str:
     elif name == 'llae':
         return f"{name}_ld{ld}_K{cfg_m.K}_g{cfg_m.gamma_init}{ll}"
     elif name == 'dlrom':
-        return f"{name}_ld{ld}"
+        # Nt dans le tag : sweep en résolution temporelle (data.t_stride)
+        return f"{name}_ld{ld}_Nt{cfg_m.Nt}"
     else:
         return name
 
@@ -65,9 +66,7 @@ def main(cfg: DictConfig):
         module = AELightningModule(cfg)
 
     from omegaconf import OmegaConf
-    tag = _ae_tag(cfg.model)
-    if t_stride > 1:
-        tag = f"{tag}_ts{t_stride}"
+    tag      = _ae_tag(cfg.model)
     run_name = f"{tag}_ae"
     logger   = WandbLogger(
         project=cfg.project,

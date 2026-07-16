@@ -127,9 +127,10 @@ building blocks as LLAE — `ConvEncoder`/`ConvDecoder` with FiLM time condition
 - **Temporal-resolution sweep** (`data.t_stride=k`): uniform time subsampling —
   `Nt → ceil(150/k)`, `dt → k·dt`, total horizon `T` constant. Used to show DL-ROM cost/error
   scaling with `Nt` while Laplace pipelines stay at `K=16`. DL-ROM only for now (the datamodule
-  raises for other models). The AE tag gets a `_ts{k}` suffix (`dlrom_ld64_ts2`), phase 2
-  inherits `t_stride` from the AE checkpoint automatically, and `evaluate.py` compares against
-  ground truth subsampled on the same grid (`t_stride` is stored in the surrogate checkpoint).
+  raises for other models). The effective `Nt` appears in the AE tag and WandB run names
+  (`dlrom_ld64_Nt75` for `t_stride=2`), phase 2 inherits `t_stride` from the AE checkpoint
+  automatically, and `evaluate.py` compares against ground truth subsampled on the same grid
+  (`t_stride` is stored in the surrogate checkpoint).
   Example sweep: `for k in 1 2 3 5 10; do ... train_ae.py model=dlrom training=ae data.t_stride=$k; done`
 
 ## Surrogate Training (Phase 2)
@@ -211,7 +212,7 @@ AE checkpoints are saved as `{ae_tag}.pt` where `ae_tag` encodes key hyperparame
 - SLAE: `slae_ld{latent_dim}_K{K}_g{gamma_init}[_ll][_ol]`
 - LLAE: `llae_ld{latent_dim}_K{K}_g{gamma_init}[_ll]`
 - LSLAE: `lslae_ld{latent_dim}_K{K}_ksvd{k_svd}[_ll]`
-- DL-ROM: `dlrom_ld{latent_dim}`
+- DL-ROM: `dlrom_ld{latent_dim}_Nt{Nt}` (Nt = effective time grid, i.e. `ceil(150/t_stride)`)
 
 Surrogate checkpoints: `{ModelClass}__{ae_stem}__t{n_trunk}h{n_head}[_ksvd{k_svd}|_rs{r_s}rz{r_z}].pt`
 - direct : `t{n_trunk}h{n_head}`
