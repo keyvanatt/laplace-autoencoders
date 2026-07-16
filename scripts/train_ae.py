@@ -19,14 +19,15 @@ def _ae_tag(cfg_m) -> str:
     """Construit le tag unique encodant les hps clés du modèle AE."""
     name = cfg_m.name
     ld   = cfg_m.latent_dim
-    g    = cfg_m.gamma_init
     ll   = '_ll' if cfg_m.get('learnable_laplace', False) else ''
     ol   = '_ol' if cfg_m.get('optimal_laplace',   False) else ''
     if name == 'slae':
         K = cfg_m.get('K', 'all')
-        return f"{name}_ld{ld}_K{K}_g{g}{ll}{ol}"
+        return f"{name}_ld{ld}_K{K}_g{cfg_m.gamma_init}{ll}{ol}"
     elif name == 'llae':
-        return f"{name}_ld{ld}_K{cfg_m.K}_g{g}{ll}"
+        return f"{name}_ld{ld}_K{cfg_m.K}_g{cfg_m.gamma_init}{ll}"
+    elif name == 'dlrom':
+        return f"{name}_ld{ld}"
     else:
         return name
 
@@ -43,11 +44,30 @@ def main(cfg: DictConfig):
     pl.seed_everything(cfg.seed, workers=True)
     torch.backends.cudnn.benchmark = True
 
-    dm     = TransientDataModule(cfg, mode='ae')
-    module = AELightningModule(cfg)
+    # Sous-échantillonnage temporel : synchronise cfg.model.Nt (et dt) avec la grille
+    # effective avant de construire le modèle (le datamodule refuse t_stride>1 hors dlrom).
+    t_stride = int(cfg.data.get('t_stride', 1))
+    if t_stride > 1:
+        import numpy as np
+        from omegaconf import open_dict
+        Nt_raw = int(np.load(cfg.data.data_path, mmap_mode='r').shape[1])
+        with open_dict(cfg):
+            if 'Nt' in cfg.model:
+                cfg.model.Nt = len(range(0, Nt_raw, t_stride))
+            if 'dt' in cfg.model:
+                cfg.model.dt = float(cfg.data.dt) * t_stride
+
+    dm = TransientDataModule(cfg, mode='ae')
+    if cfg.model.name == 'dlrom':
+        from dl_rom.ae_module import DLROMAELightningModule
+        module = DLROMAELightningModule(cfg)
+    else:
+        module = AELightningModule(cfg)
 
     from omegaconf import OmegaConf
-    tag      = _ae_tag(cfg.model)
+    tag = _ae_tag(cfg.model)
+    if t_stride > 1:
+        tag = f"{tag}_ts{t_stride}"
     run_name = f"{tag}_ae"
     logger   = WandbLogger(
         project=cfg.project,

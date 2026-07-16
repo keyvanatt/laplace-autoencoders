@@ -56,6 +56,9 @@ def main(cfg: DictConfig):
     # -----------------------------------------------------------------------
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     pipe   = InferencePipeline.from_checkpoint(ckpt_path, device)
+    # Modèles entraînés sur une grille temporelle sous-échantillonnée (dlrom t_stride>1) :
+    # la vérité terrain est comparée sur la même grille.
+    t_stride = int(pipe.ckpt.get('t_stride', 1))
 
     run_name = os.path.splitext(os.path.basename(ckpt_path))[0]
     wandb.init(project=cfg.project, name=f"eval_{run_name}", config={
@@ -77,7 +80,7 @@ def main(cfg: DictConfig):
         theta_i = theta_raw[idx:idx+1]
         kw = {} if k_max_ov is None else {'k_max': k_max_ov}
         U_p = pipe.predict(theta_i, **kw)[0]           # (Nt, N, N)
-        U_t = np.asarray(U_raw[idx], dtype=np.float32) # (Nt, H, W)
+        U_t = np.asarray(U_raw[idx][::t_stride], dtype=np.float32) # (Nt, H, W)
 
         if U_t.shape[-1] != U_p.shape[-1]:
             import torch.nn.functional as F_nn

@@ -15,6 +15,7 @@ Supporte les backends (détection automatique depuis model_type) :
   - LLAESVDModel (LLAE + compression SVD des latents temporels)
   - SLAETuckerModel (SLAE + compression Tucker des latents Laplace)
   - LLAETuckerModel (LLAE + compression Tucker des latents Laplace)
+  - DLROMModel   (baseline DL-ROM — AE temporel + surrogate, sans Laplace)
   - CorrectionAE (post-traitement UNet, enchaîné avec SLAEModel)
 """
 from __future__ import annotations
@@ -138,7 +139,7 @@ class InferencePipeline:
             )
             return U_pred.cpu().numpy()
 
-        elif mtype == 'LLAEModel':
+        elif mtype in ('LLAEModel', 'DLROMModel'):
             U_pred = self.model.generate(theta_norm)
             U_mean = torch.as_tensor(ckpt['U_mean'], dtype=torch.float32, device=device)
             U_std  = torch.as_tensor(ckpt['U_std'],  dtype=torch.float32, device=device)
@@ -286,6 +287,20 @@ def _build_model(model_type: str, ckpt: dict, device: torch.device) -> torch.nn.
             dt          = ckpt.get('dt', 1.0),
             alpha_t     = ckpt.get('alpha_t', 0.007),
             lam         = ckpt.get('lam', 3e-5),
+        ).to(device)
+
+    elif model_type == 'DLROMModel':
+        from dl_rom.dlrom_ae import DLROMAE
+        from dl_rom.dlrom_surrogate import DLROMModel
+        ae_dummy = DLROMAE(
+            N=ckpt['N'], Nt=ckpt['Nt'], latent_dim=ckpt['latent_dim'],
+            time_L=ckpt.get('time_L', 8),
+            decoder_norm=_decoder_norm_from_ckpt(ckpt),
+        ).to(device)
+        return DLROMModel(
+            ae=ae_dummy, theta_dim=ckpt['theta_dim'],
+            hidden_dim=ckpt['hidden_dim'], head_dim=ckpt['head_dim'],
+            n_trunk=ckpt['n_trunk'], n_head=ckpt['n_head'], freq_L=ckpt['freq_L'],
         ).to(device)
 
     elif model_type == 'CorrectionAE':

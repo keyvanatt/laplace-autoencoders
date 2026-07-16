@@ -6,6 +6,10 @@ dt: 1.0
 interp_size: 128
 rule: trap
 
+# Sous-échantillonnage temporel : garde 1 pas sur t_stride (Nt → ceil(Nt/t_stride),
+# dt → dt*t_stride, T constant). Supporté par model=dlrom uniquement pour le moment.
+t_stride: 1
+
 # Fraction train/val dans le split non-test
 train_val_split: 0.8
 

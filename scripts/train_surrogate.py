@@ -25,6 +25,7 @@ from omegaconf import DictConfig
 _SURROGATE_MODULES = {
     'slae':  ('laplace_surrogate.lightning.slae_surrogate_module',     'SLAESurrogateLightningModule',    'SLAEModel'),
     'llae':  ('laplace_surrogate.lightning.llae_surrogate_module',     'LLAESurrogateLightningModule',    'LLAEModel'),
+    'dlrom': ('dl_rom.surrogate_module',                               'DLROMSurrogateLightningModule',   'DLROMModel'),
 }
 
 _SVD_SURROGATE_MODULES = {
@@ -72,21 +73,32 @@ def main(cfg: DictConfig):
     LightningModule = getattr(importlib.import_module(mod_path), cls_name)
 
     # Lit K, gamma_init et pôles optimaux depuis le checkpoint AE, avant dm.setup()
+    # (le DL-ROM n'a pas de transformée de Laplace : rien à lire)
     from laplace_surrogate.lightning.ckpt_utils import peek_ae_hparams
     from omegaconf import open_dict
-    ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
-    with open_dict(cfg):
-        cfg.model.K          = ae_hparams['K']
-        cfg.model.gamma_init = ae_hparams['gamma_init']
-        # Propager les pôles optimaux uniquement si l'AE a été entraîné avec
-        # (les anciens checkpoints n'ont pas cette info → on ne touche pas le cfg)
-        if ae_hparams['optimal_laplace']:
-            cfg.model.optimal_laplace      = True
-            cfg.model.optimal_laplace_path = ae_hparams['optimal_laplace_path']
-        # Idem pour les pôles apprenables : si l'AE est un _ll, le surrogate
-        # continue par défaut à raffiner les pôles (hérités et déjà optimisés).
-        if ae_hparams['learnable_laplace']:
-            cfg.model.learnable_laplace = True
+    if model_name == 'dlrom':
+        # Hérite le sous-échantillonnage temporel de l'AE : le nombre de heads du
+        # surrogate (K = Nt) doit correspondre à la grille sur laquelle l'AE a été entraîné.
+        from dl_rom.ckpt_utils import peek_ae_t_stride
+        ae_ts = peek_ae_t_stride(cfg.training.ae_ckpt)
+        if int(cfg.data.get('t_stride', 1)) != ae_ts:
+            with open_dict(cfg):
+                cfg.data.t_stride = ae_ts
+            print(f"[train_surrogate] data.t_stride={ae_ts} hérité du checkpoint AE")
+    else:
+        ae_hparams = peek_ae_hparams(cfg.training.ae_ckpt)
+        with open_dict(cfg):
+            cfg.model.K          = ae_hparams['K']
+            cfg.model.gamma_init = ae_hparams['gamma_init']
+            # Propager les pôles optimaux uniquement si l'AE a été entraîné avec
+            # (les anciens checkpoints n'ont pas cette info → on ne touche pas le cfg)
+            if ae_hparams['optimal_laplace']:
+                cfg.model.optimal_laplace      = True
+                cfg.model.optimal_laplace_path = ae_hparams['optimal_laplace_path']
+            # Idem pour les pôles apprenables : si l'AE est un _ll, le surrogate
+            # continue par défaut à raffiner les pôles (hérités et déjà optimisés).
+            if ae_hparams['learnable_laplace']:
+                cfg.model.learnable_laplace = True
 
     dm = TransientDataModule(cfg, mode='surrogate')
     dm.setup()

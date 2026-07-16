@@ -247,10 +247,17 @@ class TransientDataModule(pl.LightningDataModule):
         cfg_t = self.cfg.training
 
         model_name = self.cfg.model.get('name', 'slae')
-        # LLAE encode dans le domaine temporel : pas besoin de la transformée de Laplace
+        # LLAE et DL-ROM encodent dans le domaine temporel : pas besoin de la transformée de Laplace
         # Pour le surrogate SLAE on garde laplace=True pour avoir ds.s (les pôles de Laplace)
-        laplace = (self.mode == 'surrogate' and model_name != 'llae') or \
-                  (self.mode == 'ae' and model_name != 'llae')
+        laplace = self.mode in ('ae', 'surrogate') and model_name not in ('llae', 'dlrom')
+
+        # Sous-échantillonnage temporel (sweep sur Nt) — supporté par dlrom uniquement pour le moment
+        t_stride = int(cfg_d.get('t_stride', 1))
+        if t_stride > 1 and model_name != 'dlrom':
+            raise NotImplementedError(
+                f"data.t_stride={t_stride} n'est supporté que pour model=dlrom pour le moment "
+                f"(reçu model={model_name!r})."
+            )
 
         # s_list pour la transformée de Laplace
         s_list = None
@@ -284,6 +291,7 @@ class TransientDataModule(pl.LightningDataModule):
             rule=cfg_d.rule,
             interp_size=cfg_d.interp_size,
             dt=cfg_d.dt,
+            t_stride=t_stride,
         )
 
         # Splits (test fixe + train/val aléatoire reproductible)
@@ -301,7 +309,7 @@ class TransientDataModule(pl.LightningDataModule):
 
         self.dataset.fit(self.train_idx)
 
-        if self.mode == 'ae' and model_name == 'llae':
+        if self.mode == 'ae' and model_name in ('llae', 'dlrom'):
             self.train_dataset = _TimeSeqDataset(self.dataset, self.train_idx)
             self.val_dataset   = _TimeSeqDataset(self.dataset, self.val_idx)
 
