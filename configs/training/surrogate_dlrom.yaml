@@ -9,4 +9,4 @@ lr_decoder: 5.0e-5
 patience: 40
 
 # Checkpoint AE DL-ROM à charger
-ae_ckpt: checkpoints/dlrom_ld64.pt
+ae_ckpt: checkpoints/dlrom_ld64_Nt150.pt
