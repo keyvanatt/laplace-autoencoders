@@ -56,8 +56,7 @@ def main(cfg: DictConfig):
     model_name = cfg.model.name
     use_tucker = bool(cfg.training.get('r_s', None) is not None
                       and cfg.training.get('r_z', None) is not None)
-    use_svd    = bool(cfg.training.get('k_svd', None) is not None
-                      and cfg.training.get('lr_V', None) is not None)
+    use_svd    = bool(cfg.training.get('k_svd', None) is not None)
     if use_tucker:
         module_map, variant = _TUCKER_SURROGATE_MODULES, '_tucker'
     elif use_svd:

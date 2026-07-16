@@ -6,8 +6,9 @@ Pré-requis : le DataModule doit avoir appelé setup() avant la construction de 
 Offline (dans _build_model) :
   1. Charge LLAE pré-entraîné (encoder gelé)
   2. Encode toutes les simulations train+val → z_all [ns, Nt, D]
-  3. SVD tronquée sur z_train → V [D, k_svd]
-  4. Calcule stats de Ĝ = laplace.forward_transform(z @ V)
+  3. Transformée de Laplace → ẑ_train [ns, K, D], puis SVD complexe tronquée du
+     dépliage mode-latent → V [D, k_svd]  (base FIGÉE, cas r_s = K de Tucker)
+  4. Calcule stats de Ĝ = ẑ @ V
 
 Batch d'entraînement : (theta_norm, U_norm) — domaine temporel.
 Loss = spatial MSE + alpha_lat * latent MSE (sur Ĝ normalisé).
@@ -17,6 +18,8 @@ import torch
 import pytorch_lightning as pl
 from omegaconf import DictConfig
 from tqdm import tqdm
+
+from laplace_surrogate.models.tucker import _truncated_left
 
 
 # ---------------------------------------------------------------------------
@@ -49,23 +52,33 @@ def _compute_llae_latents(encoder, U_raw, indices, N, Nt,
 
 @torch.no_grad()
 def _compute_svd_and_stats(laplace, z_all, train_local, k_svd, device, batch_size=64):
-    """SVD tronquée sur z_train → V [D, k_svd], puis stats Ĝ (K, k_svd, 2)."""
+    """SVD complexe tronquée sur les latents de Laplace ẑ(s_k) → V [D, k_svd], puis stats Ĝ.
+
+    V est la base du **mode latent** du tenseur de Laplace Ẑ ∈ (ns, K, D) : les
+    k_svd premiers vecteurs singuliers gauches de son dépliage mode-2 (D, ns*K).
+    C'est exactement l'initialisation HOSVD du facteur U_z de Tucker, et à
+    r_s = K (facteur fréquence unitaire, donc mode fréquence non compressé) HOOI
+    converge vers cette même base : LLAE-SVD est le cas r_s = K de LLAE-Tucker.
+
+    La base est complexe et FIGÉE, comme les facteurs Tucker.
+    """
     _, _, D = z_all.shape
-    Z_train_flat = z_all[train_local].reshape(-1, D)
-    tqdm.write(f"  SVD tronquée sur {tuple(Z_train_flat.shape)} → k_svd={k_svd}")
-    _, _, Vh = torch.svd_lowrank(Z_train_flat, q=k_svd)
-    V = Vh.contiguous()
-    del Z_train_flat
 
-    G_hat_list = []
+    z_hat_list = []
     for start in tqdm(range(0, len(train_local), batch_size),
-                      desc='  Laplace fwd (stats Ĝ)', leave=False):
-        pos_batch  = train_local[start:start + batch_size]
-        G_batch    = (z_all[pos_batch] @ V).to(device)
-        G_hat      = laplace.forward_transform(G_batch)
-        G_hat_list.append(G_hat.cpu())
+                      desc='  Laplace fwd (fit V)', leave=False):
+        pos_batch = train_local[start:start + batch_size]
+        z_hat     = laplace.forward_transform(z_all[pos_batch].to(device))
+        z_hat_list.append(z_hat.cpu())
+    z_hat_train = torch.cat(z_hat_list, dim=0)                      # (ns, K, D) complexe
 
-    G_hat_train = torch.cat(G_hat_list, dim=0)
+    # Dépliage mode-latent (D, ns*K), puis vecteurs singuliers gauches — cf. tucker._truncated_left
+    unfold = z_hat_train.permute(2, 0, 1).reshape(D, -1)
+    tqdm.write(f"  SVD complexe (domaine de Laplace) sur {tuple(unfold.shape)} -> k_svd={k_svd}")
+    V = _truncated_left(unfold, k_svd)                              # (D, k_svd) complexe
+    del unfold
+
+    G_hat_train = z_hat_train @ V                                   # (ns, K, k_svd)
     G_hat_ri    = torch.stack([G_hat_train.real, G_hat_train.imag], dim=-1).float()
     G_hat_mean  = G_hat_ri.mean(0)
     G_hat_std   = G_hat_ri.std(0).clamp(min=1e-8)
@@ -207,7 +220,6 @@ class LLAESVDSurrogateLightningModule(pl.LightningModule):
         param_groups = [
             {'params': self.model.surrogate.parameters(), 'lr': cfg_t.lr_surrogate},
             {'params': self.model.decoder.parameters(),   'lr': cfg_t.lr_decoder},
-            {'params': [self.model.V],                    'lr': cfg_t.lr_V},
         ]
         optimizer = torch.optim.AdamW(param_groups, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

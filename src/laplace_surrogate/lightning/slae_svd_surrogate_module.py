@@ -215,7 +215,6 @@ class SLAESVDSurrogateLightningModule(pl.LightningModule):
         cfg_t = self.cfg.training
         param_groups = [
             {'params': self.model.surrogate.parameters(), 'lr': cfg_t.lr_surrogate},
-            {'params': [self.model.V],                    'lr': cfg_t.lr_V},
         ]
         if cfg_t.lr_decoder > 0.0:
             param_groups.append({'params': self.model.shared_decoder.parameters(),
