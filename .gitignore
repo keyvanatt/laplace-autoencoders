@@ -3,7 +3,7 @@ __pycache__
 wandb
 notebooks/cache*
 remote/
-.claude/
+.*/
 
 # Checkpoints are stored on Hugging Face, not in git
 # Download: hf download keyvanatt/laplace-autoencoders-checkpoints --local-dir checkpoints
