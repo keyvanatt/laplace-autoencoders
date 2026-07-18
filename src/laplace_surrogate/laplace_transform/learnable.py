@@ -77,15 +77,22 @@ class LearnableLaplace(nn.Module):
         w[0] = 0.5; w[-1] = 0.5
 
         F_full = self.dt * w[None, :] * torch.exp(-s_full[:, None] * t[None, :])
-        FtF    = torch.real(torch.conj(F_full).T @ F_full)
 
-        alpha_t = self._alpha_t_fixed if not self.learnable else self.log_alpha_t.exp()
-        lam     = self._lam_fixed     if not self.learnable else self.log_lam.exp()
+        # Assemblage et factorisation de A en float64. À K=16 les pôles se resserrent,
+        # les colonnes de F_full deviennent quasi colinéaires et κ(A) dépasse le plafond
+        # du float32 (~1e7) : Cholesky pose alors un pivot négatif sur le dernier mineur
+        # ("not positive-definite"). Le float64 (~1e15) absorbe la marge. Coût négligeable
+        # (A est Nt×Nt = 150×150). F_full reste complex64 pour le matmul aval avec z_hat.
+        F64    = F_full.to(torch.complex128)
+        FtF    = torch.real(torch.conj(F64).T @ F64)
+
+        alpha_t = (self._alpha_t_fixed if not self.learnable else self.log_alpha_t.exp()).double()
+        lam     = (self._lam_fixed     if not self.learnable else self.log_lam.exp()).double()
         A = (FtF
-             + alpha_t * self._DtTDt.to(device=device)
-             + lam * torch.eye(self.Nt, dtype=torch.float32, device=device))
+             + alpha_t * self._DtTDt.to(device=device, dtype=torch.float64)
+             + lam * torch.eye(self.Nt, dtype=torch.float64, device=device))
 
-        L = torch.linalg.cholesky(A)
+        L = torch.linalg.cholesky(A)   # float64
         return s_full, F_full, L, c_mask
 
     def _get_inv_matrices(self, device: torch.device):
@@ -149,7 +156,7 @@ class LearnableLaplace(nn.Module):
         ).to(torch.complex64)
 
         RHS = torch.real(U_hat_full @ torch.conj(F_full))
-        z_rec_flat = torch.cholesky_solve(RHS.T, L).T
+        z_rec_flat = torch.cholesky_solve(RHS.T.double(), L).T   # L en float64
         return z_rec_flat.view(B, D, self.Nt).permute(0, 2, 1).float()
 
     def log_scatter(self, epoch: int):
