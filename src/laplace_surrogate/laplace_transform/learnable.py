@@ -67,16 +67,24 @@ class LearnableLaplace(nn.Module):
         """s_k = σ_k + iω_k,  (K,) complex64."""
         return torch.complex(self.s_re, self.s_im)
 
-    def _build_inv_matrices(self, device: torch.device):
+    def _build_inv_matrices(self, device: torch.device,
+                            Nt: Optional[int] = None, dt: Optional[float] = None,
+                            rescale_reg: bool = True):
+        # Nt/dt permettent de reconstruire z(t) sur une grille arbitraire. Par défaut on
+        # utilise la grille d'entraînement (self.Nt, self.dt). Pour un Nt différent, dt est
+        # rééchantillonné de façon à conserver l'horizon physique T = (Nt-1)·dt.
+        Nt = self.Nt if Nt is None else Nt
+        dt = self.dt if dt is None else dt
+
         s = self.s_list.to(dtype=torch.complex64, device=device)
         c_mask = s.imag > 0
         s_full = torch.cat([s, torch.conj(s[c_mask])])
 
-        t = torch.arange(self.Nt, dtype=torch.float32, device=device) * self.dt
-        w = torch.ones(self.Nt, dtype=torch.float32, device=device)
+        t = torch.arange(Nt, dtype=torch.float32, device=device) * dt
+        w = torch.ones(Nt, dtype=torch.float32, device=device)
         w[0] = 0.5; w[-1] = 0.5
 
-        F_full = self.dt * w[None, :] * torch.exp(-s_full[:, None] * t[None, :])
+        F_full = dt * w[None, :] * torch.exp(-s_full[:, None] * t[None, :])
 
         # Assemblage et factorisation de A en float64. À K=16 les pôles se resserrent,
         # les colonnes de F_full deviennent quasi colinéaires et κ(A) dépasse le plafond
@@ -86,11 +94,30 @@ class LearnableLaplace(nn.Module):
         F64    = F_full.to(torch.complex128)
         FtF    = torch.real(torch.conj(F64).T @ F64)
 
+        # DtTDt (terme de lissage) est pré-calculé pour self.Nt ; pour un Nt arbitraire on
+        # le reconstruit à la volée (matrice Nt×Nt, coût négligeable).
+        if Nt == self.Nt:
+            DtTDt = self._DtTDt.to(device=device, dtype=torch.float64)
+        else:
+            Dt = (torch.diag(torch.ones(Nt - 1, device=device), 1)
+                  - torch.eye(Nt, device=device))[:Nt - 1, :]
+            DtTDt = (Dt.T @ Dt).to(torch.float64)
+
         alpha_t = (self._alpha_t_fixed if not self.learnable else self.log_alpha_t.exp()).double()
         lam     = (self._lam_fixed     if not self.learnable else self.log_lam.exp()).double()
+
+        # α_t et λ sont calibrés pour dt = self.dt. Sur une grille rééchantillonnée (Nt ≠
+        # self.Nt, même horizon T) il faut préserver la fonctionnelle continue sous-jacente :
+        # ‖Dt z‖² ≈ dt·∫z'²  →  α_t ~ 1/dt ;   ‖z‖² ≈ (1/dt)·∫z²  →  λ ~ dt.
+        # Sans ce rescale, un raffinement de grille sous-lisse et la courbe reconstruite dérive.
+        # rescale_reg=False conserve α_t et λ bruts (comportement legacy).
+        if rescale_reg:
+            scale   = self.dt / dt       # = dt_train / dt_out
+            alpha_t = alpha_t * scale
+            lam     = lam / scale
         A = (FtF
-             + alpha_t * self._DtTDt.to(device=device, dtype=torch.float64)
-             + lam * torch.eye(self.Nt, dtype=torch.float64, device=device))
+             + alpha_t * DtTDt
+             + lam * torch.eye(Nt, dtype=torch.float64, device=device))
 
         L = torch.linalg.cholesky(A)   # float64
         return s_full, F_full, L, c_mask
@@ -139,16 +166,29 @@ class LearnableLaplace(nn.Module):
         z_hat_flat = z_flat.to(dtype=F.dtype) @ F.T
         return z_hat_flat.view(B, D, self.K).permute(0, 2, 1)
 
-    def inverse_transform(self, z_hat: torch.Tensor, Nt: int) -> torch.Tensor:
+    def inverse_transform(self, z_hat: torch.Tensor, Nt: int,
+                          rescale_reg: bool = True) -> torch.Tensor:
         """
         ẑ : (B, K, latent_dim) complex64
         → z_rec : (B, Nt, latent_dim) float32
+
+        Nt fixe le nombre de frames temporelles reconstruites. Nt == self.Nt reprend la
+        grille d'entraînement (matrices en cache) ; un Nt différent rééchantillonne z(t)
+        sur Nt points en conservant l'horizon physique T = (self.Nt-1)·self.dt.
+
+        rescale_reg (défaut True) : recalibre α_t ~ 1/dt et λ ~ dt sur la nouvelle grille
+        pour préserver la fonctionnelle continue (reconstruction cohérente entre grilles).
+        Sans effet quand Nt == self.Nt.
         """
-        assert Nt == self.Nt, f"Nt mismatch: got {Nt}, expected {self.Nt}"
         B, K, D = z_hat.shape
         device  = self.s_re.device
 
-        s_full, F_full, L, c_mask = self._get_inv_matrices(device)
+        if Nt == self.Nt:
+            s_full, F_full, L, c_mask = self._get_inv_matrices(device)
+        else:
+            dt_out = self.dt * (self.Nt - 1) / max(Nt - 1, 1)
+            s_full, F_full, L, c_mask = self._build_inv_matrices(
+                device, Nt=Nt, dt=dt_out, rescale_reg=rescale_reg)
 
         z_hat_flat  = z_hat.permute(0, 2, 1).reshape(B * D, K)
         U_hat_full  = torch.cat(
@@ -157,7 +197,7 @@ class LearnableLaplace(nn.Module):
 
         RHS = torch.real(U_hat_full @ torch.conj(F_full))
         z_rec_flat = torch.cholesky_solve(RHS.T.double(), L).T   # L en float64
-        return z_rec_flat.view(B, D, self.Nt).permute(0, 2, 1).float()
+        return z_rec_flat.view(B, D, Nt).permute(0, 2, 1).float()
 
     def log_scatter(self, epoch: int):
         """Retourne un wandb.Image du scatter s_k (initial → courant)."""

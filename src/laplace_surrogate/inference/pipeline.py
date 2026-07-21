@@ -104,6 +104,8 @@ class InferencePipeline:
         lam: float = 1e-6,
         rule: str = 'trap',
         k_max: int | None = None,
+        n_frames: int | None = None,
+        rescale_reg: bool = True,
     ) -> np.ndarray:
         """
         Prédit U(t) pour un batch de theta.
@@ -112,10 +114,16 @@ class InferencePipeline:
         ----------
         theta_raw : array-like (B, theta_dim) ou (theta_dim,) — valeurs physiques
         dt        : pas de temps (si None, lu depuis le checkpoint)
+        n_frames  : nombre de frames temporelles en sortie (si None, le Nt d'entraînement).
+                    Uniquement pris en compte pour SLAEModel et LLAEModel ; l'horizon
+                    physique T est conservé et U(t) est rééchantillonné sur n_frames points.
+        rescale_reg : recalibre la régularisation Laplace (α_t ~ 1/dt, λ ~ dt) quand
+                    n_frames change la résolution — actif par défaut. Sans effet si
+                    n_frames vaut None ou le Nt d'entraînement.
 
         Returns
         -------
-        U_pred : np.ndarray (B, Nt, N, N) float32 — valeurs physiques
+        U_pred : np.ndarray (B, n_frames, N, N) float32 — valeurs physiques
         """
         ckpt   = self.ckpt
         device = self.device
@@ -135,12 +143,14 @@ class InferencePipeline:
             alpha_t = float(ckpt.get('alpha_t', alpha_t))
             lam     = float(ckpt.get('lam', lam))
             U_pred  = self.model.generate(
-                theta_norm, dt=dt_eff, alpha_t=alpha_t, lam=lam, rule=rule, k_max=k_max
+                theta_norm, dt=dt_eff, alpha_t=alpha_t, lam=lam, rule=rule,
+                k_max=k_max, Nt=n_frames, rescale_reg=rescale_reg,
             )
             return U_pred.cpu().numpy()
 
         elif mtype in ('LLAEModel', 'DLROMModel'):
-            U_pred = self.model.generate(theta_norm)
+            gen_kwargs = {} if mtype == 'DLROMModel' else {'Nt': n_frames, 'rescale_reg': rescale_reg}
+            U_pred = self.model.generate(theta_norm, **gen_kwargs)
             U_mean = torch.as_tensor(ckpt['U_mean'], dtype=torch.float32, device=device)
             U_std  = torch.as_tensor(ckpt['U_std'],  dtype=torch.float32, device=device)
             U_pred = U_pred * U_std + U_mean
