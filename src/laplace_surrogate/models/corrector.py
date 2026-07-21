@@ -136,9 +136,10 @@ class CorrectedSLAEModel(SLAEModel):
 
     def _generate(self, theta_norm: torch.Tensor,
                   dt: float = 1.0, alpha_t: float = 0.0, lam: float = 1e-6,
-                  rule: str = 'trap', k_max=None,
-                  correction_chunk: int = 64) -> torch.Tensor:
-        U_pred = super()._generate(theta_norm, dt=dt, alpha_t=alpha_t, lam=lam, rule=rule, k_max=k_max)
+                  rule: str = 'trap', k_max=None, Nt: int | None = None,
+                  rescale_reg: bool = True, correction_chunk: int = 64) -> torch.Tensor:
+        U_pred = super()._generate(theta_norm, dt=dt, alpha_t=alpha_t, lam=lam,
+                                   rule=rule, k_max=k_max, Nt=Nt, rescale_reg=rescale_reg)
         B, Nt, N, _ = U_pred.shape
         frames = U_pred.reshape(B * Nt, N, N)
         chunks = [self.correction_ae(frames[i:i + correction_chunk])

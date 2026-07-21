@@ -140,7 +140,13 @@ class LLAEModel(nn.Module):
         return total, {'lat': lat_loss.detach(), 'spat': spat_loss.detach()}
 
     @torch.no_grad()
-    def generate(self, theta_norm: torch.Tensor) -> torch.Tensor:
+    def generate(self, theta_norm: torch.Tensor, Nt: int | None = None,
+                 rescale_reg: bool = True) -> torch.Tensor:
+        # Nt (optionnel) choisit le nombre de frames temporelles en sortie : la transformée
+        # inverse rééchantillonne z(t) sur Nt points à horizon T constant, et le décodeur
+        # (conditionné sur t/T) reconstruit chaque frame. rescale_reg recalibre la
+        # régularisation Laplace sur la nouvelle grille (cf. inverse_transform).
+        Nt      = self.Nt if Nt is None else Nt
         z_hat   = self._predict_z_hat(theta_norm)
-        z_tilde = self.laplace.inverse_transform(z_hat, self.Nt)
+        z_tilde = self.laplace.inverse_transform(z_hat, Nt, rescale_reg=rescale_reg)
         return self._decode_seq(z_tilde)

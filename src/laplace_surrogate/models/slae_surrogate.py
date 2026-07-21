@@ -180,12 +180,17 @@ class SLAEModel(BaseDecoder):
         total     = alpha_spat * spat_loss + alpha_lat * lat_loss
         return total, {'spat': spat_loss.detach(), 'lat': lat_loss.detach()}
 
-    def _generate(self, theta_norm: torch.Tensor, **kwargs) -> torch.Tensor:
+    def _generate(self, theta_norm: torch.Tensor, Nt: int | None = None,
+                  rescale_reg: bool = True, **kwargs) -> torch.Tensor:
         # M est déjà en espace Laplace physique (dénormalisé dans _forward_k)
-        # → inverse Laplace donne directement U physique
+        # → inverse Laplace donne directement U physique.
+        # Nt (optionnel) choisit le nombre de frames temporelles en sortie : la transformée
+        # inverse rééchantillonne U(t) sur Nt points à horizon T constant. rescale_reg
+        # recalibre la régularisation Laplace sur la nouvelle grille (cf. inverse_transform).
+        Nt   = self.Nt if Nt is None else Nt
         M, _ = self._forward_k(theta_norm)
-        U    = self.laplace.inverse_transform(M.permute(0, 2, 1), self.Nt)
-        return U.reshape(theta_norm.shape[0], self.Nt, self.N, self.N)
+        U    = self.laplace.inverse_transform(M.permute(0, 2, 1), Nt, rescale_reg=rescale_reg)
+        return U.reshape(theta_norm.shape[0], Nt, self.N, self.N)
 
     def _generate_diff(self, theta_norm: torch.Tensor, **kwargs) -> torch.Tensor:
         return self._generate(theta_norm)
