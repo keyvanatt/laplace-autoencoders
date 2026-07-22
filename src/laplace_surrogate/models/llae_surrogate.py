@@ -102,7 +102,14 @@ class LLAEModel(nn.Module):
         """z: (B, Nt, D) → U_rec: (B, Nt, N, N)"""
         B, Nt, D = z.shape
         flat     = z.reshape(B * Nt, D)
-        t        = torch.arange(Nt, dtype=z.dtype, device=z.device) / max(Nt - 1, 1)
+        # Ratios temporels physiques, pas index/(Nt-1). La transformee inverse emet
+        # aux instants k * self.Nt * dt / Nt sur un horizon T = (self.Nt - 1) * dt ;
+        # un ratio calcule sur l'indice etalerait ces instants de 0 a 1 et le decodeur
+        # reconstruirait chaque frame comme si elle etait posterieure a sa vraie date.
+        # A Nt == self.Nt les deux coincident, d'ou l'invisibilite du defaut a pleine
+        # resolution — et une erreur qui croissait a mesure que la grille s'allegeait.
+        t        = (torch.arange(Nt, dtype=z.dtype, device=z.device)
+                    * (self.Nt / Nt) / max(self.Nt - 1, 1))
         t_ratios = t.unsqueeze(0).expand(B, -1).reshape(B * Nt, 1)
         if self.training:
             chunks_z = flat.split(256)
