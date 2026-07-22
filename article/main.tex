@@ -67,9 +67,9 @@
 \setcounter{tocdepth}{1}
 
 \begin{abstract}
-Deep-learning reduced-order models (DL-ROMs) predict a full spatiotemporal field from a parameter vector, but they all retain the full temporal resolution of the trajectory: one latent code per time step, so the surrogate's output size and cost scale with the number of time steps $N_t$. We propose to compress the time axis itself with the Laplace transform, predicting $K \ll N_t$ complex spectral coefficients in a single shot and recovering the trajectory by a differentiable regularized inversion. Two instantiations are studied and compared, depending on where the transform is applied: in the physical domain (SLAE, $K$ frequency frames to decode) or in the latent space (LLAE). We further derive a bias--amplification bound for the regularized inversion showing that everything the integration contour does to the reconstruction is carried by two contour-dependent scalars, and use it to select the contour offline --- without training any network --- rather than fixing it by convention.
+Deep-learning reduced-order models (DL-ROMs) predict a full spatiotemporal field from a parameter vector, but they all retain the full temporal resolution of the trajectory: one latent code per time step, so the surrogate's output size and cost scale with the number of time steps $N_t$. We propose to compress the time axis itself with the Laplace transform, predicting $K \ll N_t$ complex spectral coefficients in a single shot and recovering the trajectory by a differentiable regularized inversion. Two instantiations are studied and compared, depending on where the transform is applied: in the physical domain (SLAE, $K$ frequency frames to decode) or in the latent space (LLAE). We further derive a bias--amplification bound showing that everything the regularized inversion does to the reconstruction is carried by two scalars depending on the triplet $(s_k, \alpha_t, \lambda)$ --- the poles and the regularisation weights together --- and use it to select that triplet offline, without training any network, rather than fixing it by convention.
 
-On a parametric transient combustion problem ($N_t = 150$), both instantiations improve substantially on a linear POD surrogate in the Laplace domain ($8.91\%$ median relative $L^2$ error): LLAE reaches $4.13\%$ and SLAE $5.04\%$ with an optimised contour. A Laplace-free DL-ROM ablation reaches $3.80\%$, so temporal compression is not what buys accuracy --- the non-linear autoencoder is --- and it costs $0.4$ to $3.7$ points. What it buys is cost and flexibility at a fixed output: at identical $150$-step output and measured in a single benchmarking run, SLAE runs \pend{$2.1\times$} faster than the DL-ROM on \pend{$3.9\times$} less memory with a $6.8\times$ smaller surrogate, and a single trained Laplace model answers at any output resolution, where the DL-ROM requires one training per temporal grid. Contour optimisation is the cheapest accuracy in the study: it improves the deployed error at every $K$, by up to $1.85$\,pp, at no inference cost.
+On a parametric transient combustion problem ($N_t = 150$), both instantiations improve substantially on a linear POD surrogate in the Laplace domain ($8.91\%$ median relative $L^2$ error): LLAE reaches $4.13\%$ and SLAE $5.04\%$ with an optimised contour. A Laplace-free DL-ROM ablation reaches $3.80\%$, so temporal compression is not what buys accuracy --- the non-linear autoencoder is --- and it costs $0.4$ to $3.7$ points. What it buys is cost and flexibility at a fixed output: at identical $150$-step output and measured in a single benchmarking run, SLAE runs $2.0\times$ faster than the DL-ROM on $3.9\times$ less memory with a $6.8\times$ smaller surrogate, and a single trained Laplace model answers at any output resolution, where the DL-ROM requires one training per temporal grid. Optimising the inversion is the cheapest accuracy in the study: it improves the deployed error at every $K$, by up to $1.85$\,pp, at no inference cost.
 \end{abstract}
 
 \tableofcontents
@@ -90,7 +90,7 @@ This paper fills that gap. We situate our work in the DL-ROM family and introduc
 \begin{itemize}
     \item \emph{Temporal compression via the Laplace transform (main contribution):} we propose and evaluate using the Laplace transform to compress the temporal dimension of the surrogate target from $N_t$ frames to $K \ll N_t$ spectral coefficients, making the surrogate's size and output dimension independent of the temporal horizon. Whether the \emph{complete} inference cost inherits that independence turns out to depend on where the transform is applied, and we quantify this in Section~\ref{sec:accuracy_cost}: it does for SLAE, whose decoder sees only the $K$ frequency frames, and does not for LLAE, whose decoder still emits $N_t$ physical frames. Independently of that, because the trajectory is materialised by a regularized linear solve assembled on whatever time nodes are requested, the predicted coefficients refer to no time grid at all: a single trained model answers at \emph{any} output resolution --- any $\Delta t$ at fixed horizon $T$ --- whereas a model that predicts one latent per time step is tied to the grid it was trained on, or at best pays one network evaluation per requested step.
     \item \emph{SLAE vs.\ LLAE:} we systematically compare two instantiations of the Laplace compression — in the physical domain (SLAE) and in the latent space (LLAE) — and characterize the accuracy/latency trade-off they offer.
-    \item \emph{Optimal contour selection:} for LLAE, the Laplace poles are learned end-to-end alongside the surrogate; for SLAE, we derive a bias--amplification decomposition of the reconstruction error and optimize the contour offline by minimizing a principled proxy loss that trades regularization bias against the amplification of the surrogate approximation error.
+    \item \emph{Designing the regularized inversion:} we treat the inversion as an object to be optimised rather than fixed by convention, and by that we mean the triplet $(s_k, \alpha_t, \lambda)$ --- the poles together with the two regularisation weights --- not the contour alone. For LLAE the triplet is learned end-to-end alongside the surrogate; for SLAE we derive a bias--amplification decomposition of the reconstruction error and optimise it offline, before any training, by minimizing a principled proxy loss that trades regularization bias against the amplification of the surrogate approximation error.
 \end{itemize}
 
 The remainder of this paper is organized as follows. Section 2 describes the methodology, detailing the Laplace transform, the two autoencoder families, the surrogate architectures and the two baselines. Section 3 presents the numerical results. Section 4 compares the pipelines on accuracy against cost, discusses the limitations of the study and outlines perspectives, and Section 5 concludes. The appendices detail the governing equations, the architectural hyperparameters and the derivations behind the contour optimisation.
@@ -108,9 +108,16 @@ Throughout this section, $u(t) \in \R$ denotes the field value at a single fixed
 Since $u(t)$ is strictly real-valued, its Laplace transform satisfies the conjugate symmetry property $\hat{u}(\bar{s}) = \overline{\hat{u}(s)}$. Consequently, we restrict our numerical evaluation to frequencies with non-negative imaginary parts $\omega_k \ge 0$, which halves the forward evaluation cost while providing the full spectral information required for inversion.
 
 \emph{Regularized Inversion (Tikhonov).}
-Let $\bm{F} \in \C^{K \times N_t}$ be the forward evaluation matrix, with $\bm{F}_{k,n} = \Delta t \, w_n \, e^{-s_k t_n}$, and let $\hat{\bm{u}} \in \C^K$, $\bm{u} \in \R^{N_t}$ be the vectors of Laplace coefficients and temporal values. Taking advantage of the real-valued constraint on $\bm{u}$, the reconstruction is formulated as a regularized complex least-squares problem:
+The inversion is posed not on the $K$ stored frequencies but on their \emph{conjugate-symmetric completion}
 \begin{equation}
-    \bm{u}^* = \arg\min_{\bm{u} \in \R^{N_t}} \left\| \bm{F}\bm{u} - \hat{\bm{u}} \right\|_{\C^K}^2 + \alpha_t \left\| \bm{D}_t \bm{u} \right\|_2^2 + \lambda \left\| \bm{u} \right\|_2^2
+    \mathcal{S} = \{s_k\}_{k=1}^{K} \;\cup\; \{\bar{s}_k \;:\; \omega_k > 0\},
+    \qquad
+    K_{\mathrm{full}} = |\mathcal{S}| = 2K - \#\{k : \omega_k = 0\},
+    \label{eq:sfull}
+\end{equation}
+whose additional members are known at no cost from the stored half-spectrum through $\hat{u}(\bar{s}_k) = \overline{\hat{u}(s_k)}$. This is a free doubling of the sampling points: the conjugate coefficients require no additional forward evaluation, no additional surrogate output and no additional storage --- they are obtained by changing a sign --- yet they enter the least-squares problem below as genuine extra constraints. The inversion is thus posed on $K_{\mathrm{full}} \simeq 2K$ points while the network only ever predicts $K$ of them, which is the same economy that motivated restricting the forward evaluation to $\omega_k \ge 0$ in the first place. Let $\bm{F} \in \C^{K_{\mathrm{full}} \times N_t}$ be the forward evaluation matrix assembled on $\mathcal{S}$, with $\bm{F}_{k,n} = \Delta t \, w_n \, e^{-s_k t_n}$, and let $\hat{\bm{u}} \in \C^{K_{\mathrm{full}}}$, $\bm{u} \in \R^{N_t}$ be the corresponding vectors of Laplace coefficients and temporal values. Throughout this paper $\bm{F}$ and $\hat{\bm{u}}$ always denote these conjugate-extended objects. Taking advantage of the real-valued constraint on $\bm{u}$, the reconstruction is formulated as a regularized complex least-squares problem:
+\begin{equation}
+    \bm{u}^* = \arg\min_{\bm{u} \in \R^{N_t}} \left\| \bm{F}\bm{u} - \hat{\bm{u}} \right\|_{\C^{K_{\mathrm{full}}}}^2 + \alpha_t \left\| \bm{D}_t \bm{u} \right\|_2^2 + \lambda \left\| \bm{u} \right\|_2^2
     \label{eq:tikhonov}
 \end{equation}
 where $\bm{D}_t \in \R^{(N_t-1)\times N_t}$ is the first-difference operator penalizing temporal roughness, and $\lambda > 0$ is a Tikhonov ridge regularization parameter. The corresponding optimality condition (normal equations) yields a real symmetric linear system:
@@ -118,7 +125,7 @@ where $\bm{D}_t \in \R^{(N_t-1)\times N_t}$ is the first-difference operator pen
     \left( \Re(\bm{F}^H \bm{F}) + \alpha_t \bm{D}_t^T \bm{D}_t + \lambda \bm{I} \right) \bm{u}^* = \Re(\bm{F}^H \hat{\bm{u}})
     \label{eq:normal}
 \end{equation}
-By solving this system, the conjugate frequencies are implicitly accounted for through the real-part operator $\Re(\cdot)$, ensuring a real-valued temporal reconstruction. Since the inversion is implemented via a linear solve (e.g., \texttt{torch.linalg.solve}), the operator is fully differentiable and compatible with gradient-based training. Crucially, this formulation holds for any set of frequencies $(s_k)$, with no constraint on their distribution in the complex plane.
+Two properties of $\mathcal{S}$ are worth making explicit, because the half-spectrum $\{s_k\}_{k=1}^{K}$ alone would give a different problem. First, a real $\bm{u}$ produces conjugate residuals at $s_k$ and $\bar{s}_k$, so restoring the conjugates amounts to weighting every frequency with $\omega_k > 0$ twice in \eqref{eq:tikhonov} relative to a purely real pole --- the discrete counterpart of integrating along the whole Bromwich contour rather than over $\omega \ge 0$ only. Second, on $\mathcal{S}$ both $\bm{F}^H\bm{F}$ and $\bm{F}^H\hat{\bm{u}}$ are real, their imaginary parts cancelling pairwise between conjugate members, so the operator $\Re(\cdot)$ in \eqref{eq:normal} records the real-valuedness of $\bm{u}$ without discarding any information. The linear system \eqref{eq:normal} is assembled and factorised in double precision --- at $K = 16$ the columns of $\bm{F}$ become nearly collinear and $\kappa(\bm{A})$ exceeds the reach of single precision --- by a Cholesky factorisation when $\bm{A}$ is reused across a batch of nodes, and by a dense LU solve otherwise; it is $N_t \times N_t$, so this costs nothing. The operator is fully differentiable in $(s_k, \alpha_t, \lambda)$ and compatible with gradient-based training, a property Section~\ref{sec:contour_optim} exploits. Crucially, this formulation holds for any set of frequencies $(s_k)$, with no constraint on their distribution in the complex plane.
 
 \emph{Choice of contour: truncated Bromwich.}
 A key design choice is the set of evaluation frequencies $(s_1, \dots, s_K)$. We adopt throughout the \emph{truncated Bromwich contour}: a vertical line in the complex plane at $\mathrm{Re}(s) = \gamma$, with imaginary parts equal to the first $K$ discrete Fourier frequencies,
@@ -126,11 +133,11 @@ A key design choice is the set of evaluation frequencies $(s_1, \dots, s_K)$. We
     s_k = \gamma + i\,\frac{2\pi k}{N_t\,\Delta t}, \qquad k = 0, \dots, K-1,
     \label{eq:bromwich}
 \end{equation}
-where $\gamma > 0$ is the \emph{damping parameter} and $K \le \lfloor N_t/2 \rfloor + 1$ controls the spectral truncation. With this choice, the forward sum \eqref{eq:laplace_fwd} reduces to a truncated DFT of the exponentially damped sequence:
+where $\gamma \ge 0$ is the \emph{damping parameter} and $K \le \lfloor N_t/2 \rfloor + 1$ controls the spectral truncation. We keep $\gamma \ge 0$ rather than $\gamma > 0$ because $\gamma = 0$ --- a purely imaginary contour, i.e.\ a truncated DFT --- is one of the settings we report, and because the contour optimisation of Section~\ref{sec:contour_optim} is allowed to return slightly negative abscissae; over a finite horizon the quadrature \eqref{eq:laplace_fwd} is a finite sum and remains well defined for any $s \in \C$. With this choice, the forward sum \eqref{eq:laplace_fwd} coincides with a truncated DFT of the exponentially damped sequence:
 \begin{equation}
-    \hat{u}(s_k) = \mathrm{FFT}\!\left\{ u(t_n)\,\Delta t\,w_n\,e^{-\gamma t_n} \right\}_k, \qquad k = 0,\dots,K-1,
+    \hat{u}(s_k) = \mathrm{DFT}\!\left\{ u(t_n)\,\Delta t\,w_n\,e^{-\gamma t_n} \right\}_k, \qquad k = 0,\dots,K-1,
 \end{equation}
-making the forward pass computationally efficient. Since $K < \lfloor N_t/2\rfloor + 1$, the spectrum is incomplete and we rely on the Tikhonov inversion \eqref{eq:tikhonov}--\eqref{eq:normal} in all cases. Restricting to the Bromwich structure, however, imposes that all poles share the same real part $\gamma$ and lie on a regular frequency grid — a strong constraint that may be suboptimal. Since the Tikhonov inversion handles any set of frequencies, one can in principle place the poles freely in the complex plane to better capture the signal's dynamics. This is the motivation for Section~\ref{sec:contour_optim}, which discusses how to optimize the contour beyond the Bromwich family.
+and could therefore be evaluated by an FFT; since the transform is applied either to $N_x$ pixels (SLAE) or to $d_z$ latent channels (LLAE) with $K \le 32$ and $N_t = 150$, our implementation simply forms the dense $K \times N_t$ matrix product, whose $O(K N_t)$ cost per node is negligible against the convolutional stages. Since $K < \lfloor N_t/2\rfloor + 1$, the spectrum is incomplete and we rely on the Tikhonov inversion \eqref{eq:tikhonov}--\eqref{eq:normal} in all cases. Restricting to the Bromwich structure, however, imposes that all poles share the same real part $\gamma$ and lie on a regular frequency grid — a strong constraint that may be suboptimal. Since the Tikhonov inversion handles any set of frequencies, one can in principle place the poles freely in the complex plane to better capture the signal's dynamics. This is the motivation for Section~\ref{sec:contour_optim}, which discusses how to optimize the contour beyond the Bromwich family.
 
 \subsection{Autoencoders in the Laplace Domain}
 
@@ -278,10 +285,12 @@ For SLAE-Tucker, the surrogate predicts the real-valued core matrix, which is ex
 \end{equation}
 Unlike the real basis $V$ of the SVD variant, the frequency factor $U^{(s)}$ mixes the Laplace frequencies and $U^{(z)}$ is complex-valued; neither commutes with $\mathcal{L}^{-1}$, so the back-projection necessarily precedes the inversion. Both variants share the same conceptual advantage: instead of predicting $K$ independent vectors of size $d_z$, the surrogate predicts a highly compact core matrix that captures the essential spatiotemporal dynamics.
 
-\subsection{Choosing an Optimal Laplace Contour}
+\subsection{Designing the Regularized Inversion}
 \label{sec:contour_optim}
 
 The question of how to choose the integration contour $(s_1, \dots, s_K)$ arises for both SLAE and LLAE, but the two architectures admit fundamentally different strategies.
+
+Before describing them, one point deserves stating once and plainly, because it governs how every result of Section~\ref{sec:contour_results} should be read. The object being designed here is not the contour alone but the \emph{triplet} $(s_k, \alpha_t, \lambda)$: the $K$ poles together with the two regularization weights of the inversion \eqref{eq:tikhonov}. Both strategies below move all three --- the learnable variant treats $\alpha_t$ and $\lambda$ as parameters alongside the poles, the offline variant optimises them as coordinates of the same proxy --- and the reference they are compared against fixes all three by convention: poles on the truncated Bromwich contour, and $(\alpha_t, \lambda)$ set a priori and never tuned. The improvements we report are therefore attributable to the triplet as a whole. We have not isolated the share due to displacing the poles from the share due to fitting the regularization, and an ablation freezing $(\alpha_t, \lambda)$ at their prescribed values while optimising the poles alone --- cheap, since no network is involved --- would settle it. Until then the honest reading is also the wider one: it is the \emph{regularized inversion}, poles and regularization together, that we treat as a design object of first order, rather than the placement of the sampling points on its own.
 
 \subsubsection{Learnable Contour for LLAE}
 
@@ -296,7 +305,7 @@ In contrast, making the SLAE contour learnable would require recomputing all $N_
 We present a theoretical framework for this purpose. The goal is to decompose the total reconstruction error $\bm{u}(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)$ into a \emph{bias} term (introduced by regularization and the finite contour) and a \emph{variance} term (the surrogate error propagated through the inversion), and to jointly optimize the contour and regularization parameters by minimising an upper bound on the expected reconstruction error.
 
 \paragraph{Formal Setup.}
-Using the notation of Section~\ref{sec:tikhonov}, we fix a spatial location and work with scalar (per-pixel) quantities. Let $\bm{u}(\vmu) \in \R^{N_t}$ be the true temporal signal $(u(t_n))_n$ at that location, $\hat{\bm{u}}(\vmu) \in \C^K$ its exact Laplace coefficients $(\hat{u}(s_k))_k$, and $\tilde{\bm{u}}(\vmu) \in \C^K$ the surrogate-predicted coefficients (the per-pixel counterpart of the full-field $\tilde{U}(s_k)$ of Section~\ref{sec:slae}). The regularised reconstructions from the true and predicted coefficients are, respectively,
+Using the notation of Section~\ref{sec:tikhonov}, we fix a spatial location and work with scalar (per-pixel) quantities. All Laplace-domain objects are those of \eqref{eq:sfull}: coefficient vectors carry the $K_{\mathrm{full}}$ entries of the conjugate-symmetric set $\mathcal{S}$, the $K$ predicted ones being extended by conjugation exactly as the exact ones are, and $\bm{F} \in \C^{K_{\mathrm{full}} \times N_t}$ is assembled on $\mathcal{S}$. Let $\bm{u}(\vmu) \in \R^{N_t}$ be the true temporal signal $(u(t_n))_n$ at that location, $\hat{\bm{u}}(\vmu) \in \C^{K_{\mathrm{full}}}$ its exact Laplace coefficients $(\hat{u}(s_k))_k$, and $\tilde{\bm{u}}(\vmu) \in \C^{K_{\mathrm{full}}}$ the surrogate-predicted coefficients (the per-pixel counterpart of the full-field $\tilde{U}(s_k)$ of Section~\ref{sec:slae}). The regularised reconstructions from the true and predicted coefficients are, respectively,
 \begin{equation}
     \bm{u}^*(\vmu) = \bm{A}^{-1}\Re\!\left(\bm{F}^H\hat{\bm{u}}(\vmu)\right), \qquad
     \bm{u}_{\mathrm{rec}}(\vmu) = \bm{A}^{-1}\Re\!\left(\bm{F}^H\tilde{\bm{u}}(\vmu)\right),
@@ -324,11 +333,11 @@ Taking norms in \eqref{eq:bv_decomp}, applying the triangle inequality, and usin
     \;+\;
     \underbrace{\left\|\bm{A}^{-1}\bm{F}^H\right\|}_{\text{amplification factor}}
     \;\cdot\;
-    \underbrace{\left\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\right\|_{\C^K}}_{\text{surrogate error}},
+    \underbrace{\left\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\right\|_{\C^{K_{\mathrm{full}}}}}_{\text{surrogate error}},
 \end{equation}
 valid for any $\vmu$; the derivation is elementary and given in Appendix~\ref{app:bv_proof}. The bound is not deep --- it is a triangle inequality followed by sub-multiplicativity --- and we state it only because of the structure it exposes, namely that the two coefficients multiplying $1$ and the coefficient error depend on $(s_k, \alpha_t, \lambda)$ and on nothing else. This is what makes the contour scorable without training a network, and it is the whole basis of the offline procedure below.
 
-The regularization bias depends on the true field $\bm{u}(\vmu)$ and $\bm{L}_{\mathrm{reg}}$, and is mitigated by the well-posedness of $\bm{A}^{-1}$. Any surrogate prediction error $\hat{\bm{u}} - \tilde{\bm{u}}$ is magnified during reconstruction by the amplification factor $\|\bm{A}^{-1}\bm{F}^H\|$, which plays the role of a condition number for the inversion process.
+The regularization bias depends on the true field $\bm{u}(\vmu)$ and $\bm{L}_{\mathrm{reg}}$, and is mitigated by the well-posedness of $\bm{A}^{-1}$. Any surrogate prediction error $\hat{\bm{u}} - \tilde{\bm{u}}$ is magnified during reconstruction by the amplification factor $\|\bm{A}^{-1}\bm{F}^H\|$, which plays the role of a condition number for the inversion process. In \eqref{eq:bv_bound} and in everything derived from it, $\|\cdot\|$ applied to a matrix is the operator $2$-norm; the implementation evaluates instead the Frobenius norm $\|\bm{A}^{-1}\bm{F}^H\|_F \ge \|\bm{A}^{-1}\bm{F}^H\|_2$, which is cheaper to differentiate and preserves the inequality.
 
 \paragraph{Optimization Problem Formulation.}
 The matrices $\bm{F}$ and $\bm{L}_{\mathrm{reg}}$, and consequently $\bm{A}$, depend explicitly on the contour $(s_1,\dots,s_K)$, on $\lambda$, and on $\alpha_t$. We aim to jointly optimize these parameters to minimise the expected mean reconstruction error $\mathbb{E}_{\vmu}[\|\bm{u}(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\|]$. Since evaluating this true error directly is challenging without ground truth for every candidate contour, we treat the hyperparameters as learnable parameters and optimize a proxy loss $\mathcal{L}^{\mathrm{proxy}}$ derived directly from the bound~\eqref{eq:bv_bound}:
@@ -337,32 +346,34 @@ The matrices $\bm{F}$ and $\bm{L}_{\mathrm{reg}}$, and consequently $\bm{A}$, de
     \quad
     \mathcal{L}_{\mathrm{bias}} = \mathbb{E}_{\vmu}\bigl[\|\bm{u}(\vmu) - \bm{u}^*(\vmu)\|\bigr],
     \quad
-    \mathcal{L}_{\mathrm{var}} = \left\|\bm{A}^{-1}\bm{F}^H\right\| \cdot \epsilon_{\mathrm{surr}},
+    \mathcal{L}_{\mathrm{var}} = \left\|\bm{A}^{-1}\bm{F}^H\right\|_F \cdot \epsilon_{\mathrm{surr}},
 \end{equation}
-where $\epsilon_{\mathrm{surr}} = \mathbb{E}_{\vmu}[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K}]$ is the expected surrogate error. By Jensen's inequality ($\mathbb{E}[\sqrt{X}] \leq \sqrt{\mathbb{E}[X]}$), this expected norm is bounded by:
+where $\epsilon_{\mathrm{surr}} = \mathbb{E}_{\vmu}[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^{K_{\mathrm{full}}}}]$ is the expected surrogate error. By Jensen's inequality ($\mathbb{E}[\sqrt{X}] \leq \sqrt{\mathbb{E}[X]}$), this expected norm is bounded by:
 \begin{equation}
 \begin{aligned}
-    \epsilon_{\mathrm{surr}} &\;\leq\; \sqrt{\mathbb{E}_{\vmu}\!\left[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|^2_{\C^K}\right]} \\
-    &= \sqrt{\sum_{k=1}^{K}\mathbb{E}_{\vmu}\!\left[|\hat{u}_k(\vmu) - \tilde{u}_k(\vmu)|^2\right]},
+    \epsilon_{\mathrm{surr}} &\;\leq\; \sqrt{\mathbb{E}_{\vmu}\!\left[\|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|^2_{\C^{K_{\mathrm{full}}}}\right]} \\
+    &= \sqrt{\sum_{s_k \in \mathcal{S}}\mathbb{E}_{\vmu}\!\left[|\hat{u}_k(\vmu) - \tilde{u}_k(\vmu)|^2\right]},
 \end{aligned}
 \end{equation}
 
 \paragraph{Approximating the Surrogate Error via SVD Residual.}
-Training a full neural surrogate for every proposed contour is computationally intractable. We therefore approximate the per-frequency expected surrogate error using the mean SVD residual. Here $\hat{U}(s_k;\vmu) \in \C^{N_x}$ denotes the \emph{full spatial} Laplace field at frequency $s_k$ (the vector of per-pixel values $\hat{u}_k(\vmu)$ across all $N_x$ locations), as opposed to the scalar $\hat{u}_k(\vmu)$ at a single location used above. For any specific frequency $s_k$, let $\bm{U}^{(k)} = [\hat{U}(s_k;\vmu_1),\dots,\hat{U}(s_k;\vmu_{N_{\mathrm{train}}})] \in \C^{N_x \times N_{\mathrm{train}}}$ be the dataset matrix formed by stacking the spatial Laplace fields across all training instances. The expected squared error of the optimal linear rank-$d_z$ surrogate equals the mean squared column-wise error:
+Training a full neural surrogate for every proposed contour is computationally intractable. We therefore replace the expected surrogate error by the residual of the best \emph{linear} reduction of the same rank, which is available in closed form from a singular value decomposition. Here $\hat{U}(s_k;\vmu) \in \C^{N_x}$ denotes the \emph{full spatial} Laplace field at frequency $s_k$ (the vector of per-pixel values $\hat{u}_k(\vmu)$ across all $N_x$ locations), as opposed to the scalar $\hat{u}_k(\vmu)$ at a single location used above. Each instance is represented by the real vector obtained by stacking its $K$ spatial Laplace fields and splitting them into real and imaginary parts,
 \begin{equation}
-    \mathbb{E}_{\vmu}\!\left[\|\hat{U}(s_k;\vmu) - \hat{U}^{\mathrm{lin}}(s_k;\vmu)\|^2\right] = \frac{1}{N_{\mathrm{train}}}\left\|\bm{U}^{(k)} - \hat{\bm{U}}^{(k)}_{\mathrm{lin}}\right\|_F^2.
+    \bm{a}(\vmu) = \bigl[\Re\hat{U}(s_1;\vmu);\, \Im\hat{U}(s_1;\vmu);\, \dots;\, \Re\hat{U}(s_K;\vmu);\, \Im\hat{U}(s_K;\vmu)\bigr] \in \R^{2 N_x K},
 \end{equation}
-The minimum of this squared Frobenius norm over all rank-$d_z$ approximations is achieved by the truncated SVD and equals exactly the sum of the discarded squared singular values. The optimal linear baseline error is therefore:
+and the design is summarised by the matrix $\bm{U} = [\bm{a}(\vmu_1),\dots,\bm{a}(\vmu_{N_{\mathrm{opt}}})] \in \R^{2N_x K \times N_{\mathrm{opt}}}$ assembled over a sample of $N_{\mathrm{opt}}$ training instances. The expected squared error of the optimal linear rank-$d_z$ reduction is the mean squared column-wise error, whose minimum over all rank-$d_z$ approximations is attained by the truncated SVD and equals the sum of the discarded squared singular values:
 \begin{equation}
-\begin{aligned}
-    \mathcal{E}_{\mathrm{SVD}}(s_k) &= \sqrt{\min_{\mathrm{rank}\,\hat{\bm{U}} \leq d_z}\frac{1}{N_{\mathrm{train}}}\left\|\bm{U}^{(k)} - \hat{\bm{U}}\right\|_F^2} \\
-    &= \sqrt{\frac{1}{N_{\mathrm{train}}}\sum_{j > d_z}\!\left(\sigma_j^{(k)}\right)^2},
-\end{aligned}
+\label{eq:svd_residual}
+    \mathcal{E}_{\mathrm{SVD}}
+    = \sqrt{\min_{\mathrm{rank}\,\hat{\bm{U}} \le d_z} \frac{1}{N_{\mathrm{opt}}}\left\|\bm{U} - \hat{\bm{U}}\right\|_F^2}
+    = \sqrt{\frac{1}{N_{\mathrm{opt}}}\sum_{j > d_z}\sigma_j^2},
 \end{equation}
-where $\sigma_j^{(k)}$ are the singular values of $\bm{U}^{(k)}$. This establishes the fundamental lower bound for the expected error of any linear surrogate of latent dimension $d_z$. Since a non-linear AE with bottleneck $d_z$ generalizes the linear SVD, the \emph{optimal} AE error --- the infimum over the hypothesis class, under exact global minimisation --- satisfies $\epsilon^\star_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$ (see Appendix~\ref{app:bv_proof}). This bounds an idealisation, not a trained network: the error actually attained by gradient descent under a particular loss and a finite budget can exceed $\mathcal{E}_{\mathrm{SVD}}$, and for SLAE it does in four of the seven configurations of Table~\ref{tab:ae_results}. We therefore use $\mathcal{E}_{\mathrm{SVD}}$ strictly as a proxy, relying on the \emph{relative} behavior of $\epsilon_{\mathrm{surr}}$ with respect to the contour rather than on its absolute value. The SVD residual is fast and deterministic to compute for any candidate contour, making it highly suitable for iterative optimisation. To account for the enhanced expressivity of the non-linear AE over the linear baseline, we introduce a scaling hyperparameter $\lambda_{\mathrm{AE}} \geq 1$.
+where $\sigma_j$ are the singular values of $\bm{U}$. Two features of \eqref{eq:svd_residual} are deliberate and should be read literally. First, the basis is \emph{single and shared across the $K$ frequencies}: the residual scores a rank-$d_z$ reduction of the entire space--frequency field of a simulation, not $K$ independent rank-$d_z$ reductions, one per frequency. This is a more constrained --- hence more pessimistic --- reduction than the one SLAE actually performs, since SLAE encodes each frequency separately and disposes of $K d_z$ coefficients in total; we retain the joint form because it depends on the contour through a single spectrum and is what our implementation computes. Second, $\bm{U}$ is never formed: the $N_{\mathrm{opt}} \times N_{\mathrm{opt}}$ Gram matrix $\bm{U}^\top\bm{U}$ is accumulated over spatial chunks and \eqref{eq:svd_residual} read off its eigenvalues, at a cost independent of $N_x$ in memory; the truncation rank is therefore capped at $\min(d_z, N_{\mathrm{opt}})$, and we use $N_{\mathrm{opt}} = 100$ instances against $d_z = 64$.
+
+Since a non-linear AE with bottleneck $d_z$ generalizes the linear reduction, the \emph{optimal} AE error --- the infimum over the hypothesis class, under exact global minimisation --- satisfies $\epsilon^\star_{\mathrm{AE}} \leq \mathcal{E}_{\mathrm{SVD}}$ for the same class of reductions (see Appendix~\ref{app:bv_proof}). This bounds an idealisation, not a trained network: the error actually attained by gradient descent under a particular loss and a finite budget can exceed $\mathcal{E}_{\mathrm{SVD}}$, and for SLAE it does in four of the seven configurations of Table~\ref{tab:ae_results}. We therefore use $\mathcal{E}_{\mathrm{SVD}}$ strictly as a proxy, relying on the \emph{relative} behavior of $\epsilon_{\mathrm{surr}}$ with respect to the contour rather than on its absolute value --- which is also why the discrepancy in reduction class noted above is tolerable. The SVD residual is fast and deterministic to compute for any candidate contour, making it highly suitable for iterative optimisation. To account for the enhanced expressivity of the non-linear AE over the linear baseline, we introduce a scaling hyperparameter $\lambda_{\mathrm{AE}} \geq 1$.
 
 \paragraph{A Smoothness Heuristic on the Bias Term.}
-We add one purely \emph{heuristic} ingredient, which does not follow from the bound~\eqref{eq:bv_bound}. At equal bias norm, a smooth offset is far less damaging than Gibbs-like oscillations --- the characteristic artefact of spectral truncation --- yet the $L^2$ norm does not distinguish them. We therefore also penalise the finite differences of the bias error. Writing $\bm{e}(\vmu) = \bm{U}(\vmu) - \bm{U}^*(\vmu) \in \R^{N_x \times N_t}$ and $\bm{D}_t$, $\bm{D}_x$ for the first-order difference operators along the temporal and spatial axes,
+We add one purely \emph{heuristic} ingredient, which does not follow from the bound~\eqref{eq:bv_bound}. At equal bias norm, a smooth offset is far less damaging than Gibbs-like oscillations --- the characteristic artefact of spectral truncation --- yet the $L^2$ norm does not distinguish them. We therefore also penalise the finite differences of the bias error. Writing $\bm{e}(\vmu) = \bm{U}(\vmu) - \bm{U}^*(\vmu) \in \R^{N_x \times N_t}$ and $\bm{D}_t$, $\bm{D}_x$, $\bm{D}_y$ for the first-order difference operators along the temporal axis and along the two axes of the spatial grid,
 \begin{equation}
 \label{eq:bias_smooth}
     \mathcal{L}_{\mathrm{bias}} =
@@ -370,7 +381,7 @@ We add one purely \emph{heuristic} ingredient, which does not follow from the bo
     \mathbb{E}_{\vmu}\Bigl[\,
         \|\bm{e}(\vmu)\|_F
         + \lambda_{\Delta t}\,\|\bm{D}_t\bm{e}(\vmu)\|_F
-        + \lambda_{\Delta x}\,\|\bm{D}_x\bm{e}(\vmu)\|_F
+        + \lambda_{\Delta x}\,\bigl(\|\bm{D}_x\bm{e}(\vmu)\|_F + \|\bm{D}_y\bm{e}(\vmu)\|_F\bigr)
     \,\Bigr],
 \end{equation}
 the normalisation keeping $\mathcal{L}_{\mathrm{bias}}$ on the scale of the variance term irrespective of the weights. Setting $\lambda_{\Delta t} = \lambda_{\Delta x} = 0$ recovers the plain bias of \eqref{eq:bv_bound}; with positive weights the objective is no longer an upper bound on the reconstruction error, the guarantee being traded for a preference over the \emph{shape} of the residual. The final proxy objective is therefore:
@@ -378,19 +389,20 @@ the normalisation keeping $\mathcal{L}_{\mathrm{bias}}$ on the scale of the vari
 \label{eq:proxy}
 \begin{aligned}
     \mathcal{L}^{\mathrm{proxy}} &=
-    \frac{1}{N_{\mathrm{train}}\,(1 + \lambda_{\Delta t} + \lambda_{\Delta x})}
-    \sum_{\vmu}\Bigl(
-        \|\bm{e}(\vmu)\|_F
-        + \lambda_{\Delta t}\|\bm{D}_t\bm{e}(\vmu)\|_F
-        + \lambda_{\Delta x}\|\bm{D}_x\bm{e}(\vmu)\|_F
+    \frac{1}{N_{\mathrm{opt}}\,(1 + \lambda_{\Delta t} + \lambda_{\Delta x})}
+    \sum_{i=1}^{N_{\mathrm{opt}}}\Bigl(
+        \|\bm{e}(\vmu_i)\|_F
+        + \lambda_{\Delta t}\|\bm{D}_t\bm{e}(\vmu_i)\|_F \\
+    &\qquad\qquad
+        + \lambda_{\Delta x}\bigl(\|\bm{D}_x\bm{e}(\vmu_i)\|_F + \|\bm{D}_y\bm{e}(\vmu_i)\|_F\bigr)
     \Bigr) \\
     &\quad +\;
-    \frac{\left\|\bm{A}^{-1}\bm{F}^H\right\|}{\lambda_{\mathrm{AE}}}
+    \frac{\left\|\bm{A}^{-1}\bm{F}^H\right\|_F}{\lambda_{\mathrm{AE}}}
     \cdot
-    \sqrt{\frac{1}{N_{\mathrm{train}}}\sum_{k=1}^{K}\sum_{j > d_z}\!\left(\sigma_j^{(k)}\right)^2}.
+    \sqrt{\frac{1}{N_{\mathrm{opt}}}\sum_{j > d_z}\sigma_j^2}.
 \end{aligned}
 \end{equation}
-Minimizing \eqref{eq:proxy} by gradient descent jointly optimizes the contour frequencies and the regularization parameters, trading bias against variance in a principled and fully differentiable manner.
+Minimizing \eqref{eq:proxy} by gradient descent jointly optimizes the contour frequencies and the regularization parameters, trading bias against variance in a principled and fully differentiable manner. Both terms are evaluated on the same sample of $N_{\mathrm{opt}}$ training instances, drawn at a single rotation angle so that the sample spans the $(k, C)$ plane rather than $36$ views of a few simulations; the whole procedure runs in double precision and touches no network. The remaining settings --- optimiser, step count, the values of $\lambda_{\Delta t}$, $\lambda_{\Delta x}$, $\lambda_{\mathrm{AE}}$, and the box constraints $\sigma_k \ge -0.05$, $\omega_k \ge 0$, $\alpha_t, \lambda \in [10^{-6}, 1]$ under which \eqref{eq:proxy} is minimised --- are reported in Section~\ref{sec:contour_results}, where the optimised contours are used.
 
 % ─── Baselines ───────────────────────────────────────────────────────────────
 \subsection{Baselines}
@@ -686,10 +698,15 @@ The performance of the models is evaluated quantitatively using the relative $L^
 \end{equation}
 We first characterize the autoencoder architectures in isolation, then evaluate the end-to-end surrogate models.
 
-\subsection{POD Baseline Results}
+\subsection{Baseline Results}
+\label{sec:baseline_results}
+
+The two references of Section~\ref{sec:baselines} remove one ingredient each --- POD in the Laplace domain drops the non-linearity, the DL-ROM drops the Laplace transform --- and both are characterised here in the same two stages as the Laplace pipelines themselves. The first stage isolates the \emph{representation}: the reconstruction error obtained when the true field is passed through the compression and back, with no surrogate involved, which sets the floor of the pipeline. The second stage is the deployed \emph{surrogate}, predicting from $\vmu$ alone. Reporting both separates what the representation cannot represent from what the regression fails to predict, and the difference between them --- the Gap --- is the quantity that decides whether a better floor is worth having.
+
+\subsubsection{Linear Baseline: POD in the Laplace Domain}
 \label{sec:pod_results}
 
-We characterize the linear POD baseline (Section~\ref{sec:pod_baseline}) by sweeping its three hyperparameters independently around a base configuration ($K=16$, $k_{\mathrm{pod}}=64$, $\gamma=0.01$): the number of Laplace frequencies $K \in \{8,16,32\}$, the number of POD modes $k_{\mathrm{pod}} \in \{32,64,128\}$, and the damping parameter $\gamma \in \{0.0,0.001,0.01\}$. Each configuration is evaluated twice on the 1620 held-out test simulations: as a pure POD \emph{reconstruction} (projecting the true test fields onto the training-set bases, no surrogate), which sets the linear error floor, and as the full end-to-end \emph{surrogate}, where a network predicts the POD coefficients from $\vmu$ and the field is recovered by back-projection through the fixed bases and Tikhonov inversion. Table~\ref{tab:pod_surr_results} reports both, and Figure~\ref{fig:pod_rec_vs_surr} compares them side by side.
+The three hyperparameters of the linear baseline (Section~\ref{sec:pod_baseline}) are swept independently around a base configuration ($K = 16$, $k_{\mathrm{pod}} = 64$, $\gamma = 0.01$): $K \in \{8,16,32\}$, $k_{\mathrm{pod}} \in \{32,64,128\}$ and $\gamma \in \{0, 0.001, 0.01\}$. Each configuration is evaluated at both stages on the 1620 test simulations --- as a pure \emph{reconstruction}, in which the true fields are projected onto the training bases with no surrogate involved, and \emph{end-to-end}, in which a network predicts the coefficients from $\vmu$. Table~\ref{tab:pod_surr_results} reports both.
 
 \begin{table}[htbp]
     \centering
@@ -712,38 +729,41 @@ We characterize the linear POD baseline (Section~\ref{sec:pod_baseline}) by swee
          64 &  8 & 0.01  & 12.01 & 17.39 & 12.41 & 18.40 & $+0.41$ & $2.9 \pm 0.2$ \\
         \bottomrule
     \end{tabular}
-    \caption{POD baseline on the test set (1620 simulations), sorted by surrogate median error. All errors are relative $L^2$ errors in \%. \emph{Rec}: pure POD reconstruction error (linear floor, no surrogate). \emph{Surr}: end-to-end surrogate error. \emph{Gap}: difference surrogate $-$ reconstruction (positive = surrogate adds error on top of the linear floor). \emph{Lat}: GPU inference latency at batch size 1 (NVIDIA RTX A5000, 50 timed runs).}
+    \caption{POD baseline on the test set (1620 simulations), sorted by surrogate median error. All errors are relative $L^2$ errors in \%. \emph{Rec}: pure POD reconstruction error (linear floor, no surrogate). \emph{Surr}: end-to-end surrogate error. \emph{Gap}: difference surrogate $-$ reconstruction (positive = surrogate adds error on top of the linear floor). \emph{Lat}: GPU inference latency at batch size 1 (50 timed runs).}
     \label{tab:pod_surr_results}
 \end{table}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{svd_rec_vs_surr.png}
-    \caption{POD reconstruction (blue) vs.\ end-to-end surrogate (green): median relative $L^2$ error for all configurations (median $\pm$ IQR). Arrows indicate the surrogate overhead.}
-    \label{fig:pod_rec_vs_surr}
-\end{figure}
-
 \paragraph{Linear reconstruction floor.}
-The POD reconstruction error is governed by the singular value decay of the Laplace-domain field matrices $\bm{U}^{(k)}$: the linear basis is accurate at low Laplace frequencies, where the spatial mode structure is smooth and low-rank, but degrades steadily at higher frequencies where the fields become localized and the singular values decay more slowly. Increasing $k_{\mathrm{pod}}$ beyond 64 reduces this high-frequency error only marginally, indicating that the residual is not a truncation artifact but an intrinsic limit of the linear subspace; likewise, beyond $K=16$ the dominant transient content is already captured and additional frequencies add noise rather than information. The damping $\gamma$ is benign at the level of the global physical-field error (8.42\%, 8.38\%, 8.09\% for $\gamma = 0$, $0.001$, $0.01$), because two error sources cancel: a purely imaginary contour concentrates energy more tightly and lowers the POD truncation error at every frequency, while a larger $\gamma$ conversely damps the Tikhonov inversion error that propagates those residuals back to the time domain. Full ablations, including the per-frequency breakdown that exposes this trade-off, are given in Appendix~\ref{app:pod_ablation}.
+The floor is governed by the singular-value decay of the Laplace-domain field matrices $\bm{U}^{(k)}$: the linear basis is accurate at low frequencies, where the spatial structure is smooth and low-rank, and degrades at higher ones, where the fields become localized. Increasing $k_{\mathrm{pod}}$ beyond $64$ yields only a marginal improvement, indicating that the residual is an intrinsic limit of the linear subspace rather than a truncation artefact. The damping is nearly neutral on the physical field ($8.42$, $8.38$ and $8.09$\% for $\gamma = 0$, $0.001$ and $0.01$) because two error sources cancel: a purely imaginary contour concentrates the energy and lowers the POD truncation error at every frequency, whereas a larger $\gamma$ attenuates the inversion error that propagates those residuals back to the time domain. Appendix~\ref{app:pod_ablation} reports the complete sweeps and the per-frequency breakdown that exposes this trade-off.
 
 \paragraph{Surrogate overhead.}
-For most configurations the surrogate step adds little above the linear floor: the gap ranges from $+0.27$ pp ($k_{\mathrm{pod}}=32$) to $+1.17$ pp ($K=32$), confirming that the MLP predicts the POD coefficients from $\vmu$ reliably. The exception is $k_{\mathrm{pod}}=128$, $K=16$: despite the best reconstruction floor (7.04\%), the surrogate error rises to 11.29\% (gap $+4.26$ pp). With $2 \times K \times k_{\mathrm{pod}} = 4{,}096$ scalar targets, the higher-dimensional regression problem overwhelms the benefit of the larger basis. The best POD surrogate is therefore $k_{\mathrm{pod}}=64$, $K=16$, $\gamma=0.01$ (8.91\% median), the balance point between basis expressivity and surrogate learnability. Inference is fast throughout — 2.9\,ms ($K=8$) to 5.6\,ms ($K=32$) per sample at batch size 1, reaching 800--870 samples/s at batch size 32 — with the cost dominated by the back-projection through $\bm{V}^{(k)}$ and the Tikhonov inversion rather than the network forward pass.
+The regression stage adds little above the floor, between $+0.27$ and $+1.17$\,pp, with one exception: at $k_{\mathrm{pod}} = 128$, $K = 16$, the best floor of the sweep ($7.04$\%) yields its worst surrogate ($11.29$\%, $+4.26$\,pp). With $2 K k_{\mathrm{pod}} = 4{,}096$ scalar targets, the higher-dimensional regression problem overwhelms the benefit of the larger basis --- a trade-off between representation quality and learnability that recurs at every stage of this study. The best POD surrogate is therefore $k_{\mathrm{pod}} = 64$, $K = 16$, $\gamma = 0.01$, at $8.91$\% median error and $2.9$--$5.6$\,ms per sample at batch size 1, its cost dominated by the back-projection through $\bm{V}^{(k)}$ and the Tikhonov solve rather than by the network forward pass. This is the floor that the non-linear autoencoders of Section~\ref{sec:ae_perf} are designed to push below; per-sample distributions are provided in Appendix~\ref{app:histograms}.
 
-This establishes the linear POD as a well-characterized reference: its error floor, set by the discarded singular values of $\bm{U}^{(k)}$, is the target that the non-linear autoencoders of Section~\ref{sec:ae_perf} are designed to push below. Per-sample error distributions for all configurations are provided in Appendix~\ref{app:histograms}.
-
-\subsection{DL-ROM Baseline Results}
+\subsubsection{Nonlinear Baseline: DL-ROM without Laplace}
 \label{sec:dlrom_results}
 
-The second reference removes the Laplace transform instead of the non-linearity (Section~\ref{sec:dlrom_baseline}). It is trained on the full temporal grid ($N_t = 150$, $\Delta t = 1$\,s) with the same convolutional backbone, the same latent dimension $d_z = 64$, the same two-phase protocol and the same data partition as the Laplace pipelines, the only structural difference being that its surrogate carries one head per time step instead of one per Laplace frequency. Figure~\ref{fig:dlrom_hist} reports the end-to-end error distribution over the 1620 held-out simulations.
+The second reference removes the Laplace transform instead of the non-linearity (Section~\ref{sec:dlrom_baseline}). It is trained on the full temporal grid ($N_t = 150$, $\Delta t = 1$\,s) with the same convolutional backbone, the same latent dimension $d_z = 64$, the same two-phase protocol and the same data partition as the Laplace pipelines, the only structural difference being that its surrogate carries one head per time step instead of one per Laplace frequency. Table~\ref{tab:dlrom_stages} reports the two stages.
 
-\begin{figure}[htbp]
+\begin{table}[htbp]
     \centering
-    \includegraphics[width=0.75\textwidth]{dlrom_hist.png}
-    \caption{DL-ROM baseline at full temporal resolution ($N_t = 150$, $d_z = 64$): distribution of the relative $L^2$ error on the physical field $U(t)$ over the test set ($n = 1620$). Median $3.80$\%, mean $4.14$\%, p90 $6.12$\%.}
-    \label{fig:dlrom_hist}
-\end{figure}
+    \small
+    \setlength{\tabcolsep}{6pt}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lrrrr}
+        \toprule
+        \textbf{Stage} & \textbf{Median (\%)} & \textbf{Mean (\%)} & \textbf{p90 (\%)} & \textbf{Gap (pp)} \\
+        \midrule
+        Autoencoder (frame-wise reconstruction) & 2.49 & 2.71 & 3.87 & --- \\
+        End-to-end surrogate                    & 3.80 & 4.15 & 6.12 & $+1.31$ \\
+        \bottomrule
+    \end{tabular}
+    \caption{DL-ROM baseline at full temporal resolution ($N_t = 150$, $d_z = 64$), relative $L^2$ error on the physical field over the test set ($n = 1620$). \emph{Autoencoder}: each of the $150$ frames encoded and decoded, no surrogate and no Laplace round-trip. \emph{Surrogate}: prediction from $\vmu$ alone through the $150$ per-time-step heads. \emph{Gap}: surrogate $-$ autoencoder.}
+    \label{tab:dlrom_stages}
+\end{table}
 
-The distribution is unimodal and tightly concentrated: median $3.80$\%, mean $4.14$\%, p90 $6.12$\%, with a thin upper tail reaching $10$\%. Removing the Laplace transform therefore costs nothing in accuracy --- on the contrary, at full temporal resolution the DL-ROM is the most accurate emulator of this study, $57$\% below the best POD surrogate ($8.91$\%, Section~\ref{sec:pod_results}) and marginally below the best Laplace surrogate reported in Section~\ref{sec:direct_surr}. This is the expected outcome of a controlled ablation: the DL-ROM predicts the latent trajectory at every one of the $150$ time steps and discards no spectral content, so it faces a strictly easier approximation problem than a surrogate constrained to $K = 16$ coefficients. Its accuracy comes at a price on the cost side --- $23.5$M surrogate parameters against $3.5$M for LLAE at $K = 16$, per equation~\eqref{eq:surr_cost} --- and it delivers the trajectory only on the grid it was trained on. The DL-ROM therefore sets a demanding accuracy reference rather than a straw man, and the comparison that matters is one of accuracy \emph{against} cost at a given output resolution; the temporal-resolution sweep of Section~\ref{sec:dlrom_baseline} and the full cost comparison are deferred to Sections~\ref{sec:synthesis}--\ref{sec:accuracy_cost}.
+\paragraph{Autoencoder stage.} The frame-wise autoencoder reconstructs the field to $2.49$\% median error ($2.71$\% mean, $3.87$\% p90). This is the lowest reconstruction error of the entire study, and necessarily so: sharing the backbone, the latent dimension and the training protocol with LLAE, it differs from it by the absence of the latent Laplace round-trip alone. The comparison with LLAE at the matched configuration ($d_z = 64$, $K = 16$, $\gamma = 0.01$, $3.20$\% in Table~\ref{tab:ae_results}) therefore prices that round-trip exactly: $0.71$\,pp, the cost of representing each latent trajectory by $16$ complex coefficients and recovering it by a truncated inversion. It is the cleanest measurement of the truncation penalty we have, since nothing else differs between the two.
+
+\paragraph{Surrogate stage.} The end-to-end error distribution over the 1620 held-out simulations (Figure~\ref{fig:dlrom_hist}, Appendix~\ref{app:histograms}) is unimodal and tightly concentrated: median $3.80$\%, mean $4.15$\%, p90 $6.12$\%, with a thin upper tail reaching $10$\%. The regression stage thus adds $1.31$\,pp to the reconstruction floor --- more than the $+0.82$\,pp of the best POD surrogate, which is expected of a target of $150$ latent frames against $2 \times 16 \times 64$ POD coefficients, and the price at which the DL-ROM's superior floor is delivered. Removing the Laplace transform therefore costs nothing in accuracy --- on the contrary, at full temporal resolution the DL-ROM is the most accurate emulator of this study, $57$\% below the best POD surrogate ($8.91$\%, Section~\ref{sec:pod_results}) and marginally below the best Laplace surrogate reported in Section~\ref{sec:direct_surr}. This is the expected outcome of a controlled ablation: the DL-ROM predicts the latent trajectory at every one of the $150$ time steps and discards no spectral content, so it faces a strictly easier approximation problem than a surrogate constrained to $K = 16$ coefficients. Its accuracy comes at a price on the cost side --- $23.5$M surrogate parameters against $3.5$M for LLAE at $K = 16$, per equation~\eqref{eq:surr_cost} --- and it delivers the trajectory only on the grid it was trained on. The DL-ROM therefore sets a demanding accuracy reference rather than a straw man, and the comparison that matters is one of accuracy \emph{against} cost at a given output resolution; the temporal-resolution sweep of Section~\ref{sec:dlrom_baseline} and the full cost comparison are deferred to Sections~\ref{sec:synthesis}--\ref{sec:accuracy_cost}.
 
 \subsection{Autoencoder Performance}
 \label{sec:ae_perf}
@@ -782,16 +802,10 @@ Table~\ref{tab:ae_results} reports the relative $L^2$ reconstruction error on th
     \label{tab:ae_results}
 \end{table}
 
-Figure~\ref{fig:ae_bar_all} summarises the reconstruction floor across all 14 checkpoints. The two families present a stark contrast. LLAE achieves a best median error of 2.92\% ($d_z=128$, $K=16$), a factor of $2.4$ below the POD reconstruction at matching configuration ($7.04\%$ at $k_{\mathrm{pod}}=128$, $K=16$) and of $2.5$--$3.5$ against the other POD configurations. SLAE yields errors in the range 7.78\%--12.26\%, broadly comparable to POD: the \emph{vs.\ POD} column of Table~\ref{tab:ae_results} hovers around zero, positive as often as negative. Taken as a pure compression stage, SLAE does not offer a meaningful gain over the linear reference. This may appear disappointing, but the picture changes substantially at the surrogate stage (Section~\ref{sec:surr_results}).
+Table~\ref{tab:ae_results} summarises the reconstruction floor across all 14 checkpoints. The two families present a stark contrast. LLAE achieves a best median error of 2.92\% ($d_z=128$, $K=16$), a factor of $2.4$ below the POD reconstruction at matching configuration ($7.04\%$ at $k_{\mathrm{pod}}=128$, $K=16$) and of $2.5$--$3.5$ against the other POD configurations. SLAE yields errors in the range 7.78\%--12.26\%, broadly comparable to POD: the \emph{vs.\ POD} column of Table~\ref{tab:ae_results} hovers around zero, positive as often as negative. Taken as a pure compression stage, SLAE does not offer a meaningful gain over the linear reference. This may appear disappointing, but the picture changes substantially at the surrogate stage (Section~\ref{sec:surr_results}).
 
 Two compounding factors explain this divergence (Sections~\ref{sec:slae}--\ref{sec:llae}). First, the input spaces differ: SLAE compresses high-dimensional complex frequency frames $\hat{U}(s_k)$, whereas LLAE encodes smoother physical frames — an intrinsically easier task. Second, the training objectives are asymmetric: LLAE's loss~\eqref{eq:llae_loss} includes a direct physical-time reconstruction term that provides dense temporal supervision, while SLAE deliberately omits it during Phase~1 (Section~\ref{sec:slae}) to preserve its computational advantage.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{ae_bar_all.png}
-    \caption{Reconstruction error for all 14 AE checkpoints, sorted by median relative $L^2$ error on the test set ($n=1620$, error bars = IQR). LLAE in red, SLAE in blue.}
-    \label{fig:ae_bar_all}
-\end{figure}
 
 Figures~\ref{fig:llae_ablation} and~\ref{fig:slae_ablation} report ablation studies for each family, varying one hyperparameter at a time while holding the others fixed.
 
@@ -799,7 +813,7 @@ Within LLAE (Figure~\ref{fig:llae_ablation}), increasing the latent dimension fr
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{llae_ablation.png}
+    \includegraphics[width=\textwidth]{ae_ablation_llae}
     \caption{LLAE ablation study. From left to right: effect of latent dimension $d_z$ ($K=16$, $\gamma=0.01$), number of Laplace frequencies $K$ ($d_z=64$, $\gamma=0.01$), and damping parameter $\gamma$ ($d_z=64$, $K=16$). Violin plots show the full error distribution; black line is the median, dashed orange line is the mean.}
     \label{fig:llae_ablation}
 \end{figure}
@@ -808,7 +822,7 @@ Within SLAE (Figure~\ref{fig:slae_ablation}), errors increase sharply at low $K$
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{slae_ablation.png}
+    \includegraphics[width=\textwidth]{ae_ablation_slae}
     \caption{SLAE ablation study. Same layout as Figure~\ref{fig:llae_ablation} (fixed parameters: $K=16$, $\gamma=0.01$ / $d_z=64$, $\gamma=0.01$ / $d_z=64$, $K=16$). Note the larger y-axis range compared to LLAE.}
     \label{fig:slae_ablation}
 \end{figure}
@@ -817,41 +831,52 @@ For SLAE, Figure~\ref{fig:slae_per_freq} shows the reconstruction error broken d
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{slae_per_freq.png}
+    \includegraphics[width=\textwidth]{ae_per_freq_slae}
     \caption{SLAE — per-frequency reconstruction error in the Laplace domain (median $\pm$ IQR, 200 test samples). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $d_z$.}
     \label{fig:slae_per_freq}
 \end{figure}
 
 Comparing with the POD per-frequency breakdown (Figure~\ref{fig:pod_per_freq}), SLAE achieves roughly half the per-frequency error of POD at each $k$: the convolutional encoder captures non-linear structure that the linear projection cannot. Yet this per-frequency advantage does not translate into a better overall spatial reconstruction (Table~\ref{tab:ae_results}). The reason is Tikhonov regularisation: the inverse transform~\eqref{eq:tikhonov}--\eqref{eq:normal} damps all frequencies uniformly, so the benefit of encoding each frequency more accurately is partially cancelled before the spatial field is recovered. The global spatial error is therefore a \emph{regularisation-weighted} aggregate of the per-frequency errors, not a direct reflection of per-frequency compression quality.
 
-\paragraph{Inference latency.}
-Table~\ref{tab:bench} and Figure~\ref{fig:bench} report per-sample inference latency and GPU throughput measured with CUDA Events on an NVIDIA RTX A5000 (10 warm-up runs, 50 timed runs, batch size 1 for latency; max batch size for throughput). \pend{SLAE is approximately $2.4\times$ faster per sample than LLAE at $K=16$ (8.0\,ms vs.\ $\sim\!19$--20\,ms)}, a direct consequence of the architectural difference detailed in Sections~\ref{sec:slae}--\ref{sec:llae}: SLAE decodes only $K$ frequency frames at inference, whereas LLAE must decode all $N_t=150$ time frames. \pend{At $K=8$, SLAE latency drops to 5.5\,ms. SLAE also requires far less GPU memory (112\,MB at $K=16$ vs.\ 525\,MB for LLAE), enabling a $5\times$ larger maximum batch size.}
+\paragraph{Inference cost.}
+Table~\ref{tab:bench} and Figure~\ref{fig:bench} report the per-sample cost of a full reconstruction along three axes: arithmetic work (FLOPs, counted on the executed graph), wall-clock latency (batch size 1, 50 timed CUDA Event runs after 10 warm-up runs), and peak GPU memory. We lead with FLOPs because they measure the cost of the \emph{architecture}, independently of how well a given implementation exploits the hardware; latency is reported alongside because it is what a user experiences, and the two do not agree here.
+
+The FLOPs follow the architectural prediction of Sections~\ref{sec:slae}--\ref{sec:llae} exactly. SLAE decodes $K$ frequency frames, so its arithmetic scales linearly with $K$: $15.5$, $31.1$ and $62.2$\,GFLOPs at $K=8$, $16$ and $32$. LLAE decodes all $N_t=150$ time frames regardless, so its cost is flat at $54.2$\,GFLOPs across a fourfold variation of $K$, and varies by less than $3\%$ between $d_z=32$ and $d_z=128$. At $K=16$ SLAE therefore performs $1.74\times$ fewer operations than LLAE, and $3.5\times$ fewer at $K=8$; the ordering reverses only above $K \approx 28$, where decoding the frequency frames becomes more expensive than decoding the time frames.
+
+Latency follows the same ordering, though with a smaller spread: $22.7 \pm 1.1$\,ms for SLAE at $K=16$ against $27.0 \pm 1.7$\,ms for LLAE, a factor of $1.2$, rising to $1.5$ at $K=8$ ($18.4$\,ms). That the wall-clock gain ($1.2\times$) falls short of the arithmetic gain ($1.74\times$) is expected: reconstruction from a physical field also requires the forward Laplace transform~\eqref{eq:laplace_fwd} and its regularised inverse, a fixed cost the arithmetic ratio does not see and which the surrogate does not pay at all (Section~\ref{sec:direct_surr}). SLAE's latency is also markedly more reproducible, its run-to-run spread being $1.0$--$1.4$\,ms against $1.7$--$2.1$ for LLAE, the frequency frames being decoded as a single batch where the time frames are not.
+
+Peak memory is the one axis on which the two families are comparable at this stage ($518$ against $556$\,MB at $K=16$), and it is also the one that separates them most clearly by regime: SLAE's allocation is set by $K$, growing from $404$ to $794$\,MB between $K=8$ and $K=32$, whereas LLAE's is set by $N_t$ and stays within $3\%$ of $556$\,MB throughout. The reconstruction stage holds the entire physical field in memory to transform it, which is what brings SLAE up to LLAE's level here; the surrogate, which never sees a physical time frame, retains a $2.6\times$ advantage (Section~\ref{sec:direct_surr}).
 
 \begin{table}[htbp]
     \centering
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{lccrrr}
         \toprule
-        \textbf{Model} & $K$ & $d_z$ & \textbf{Latency (ms)} & \textbf{Throughput (s/s)} & \textbf{Peak GPU (MB)} \\
+        \textbf{Model} & $K$ & $d_z$ & \textbf{GFLOPs} & \textbf{Latency (ms)} & \textbf{Peak GPU (MB)} \\
         \midrule
-        SLAE & 8  & 64  & \pend{$5.5 \pm 0.2$}  & \pend{224} & \pend{56}  \\
-        SLAE & 16 & 64  & \pend{$8.0 \pm 0.1$}  & \pend{134} & \pend{112} \\
-        SLAE & 16 & 128 & \pend{$8.1 \pm 0.1$}  & \pend{133} & \pend{112} \\
-        SLAE & 32 & 64  & \pend{$13.9 \pm 0.4$} &  \pend{74} & \pend{224} \\
+        SLAE & 8  & 64  & \textbf{15.5} & $\mathbf{18.4 \pm 1.3}$ & \textbf{404} \\
+        SLAE & 16 & 32  & 31.0 & $22.7 \pm 1.1$ & 510 \\
+        SLAE & 16 & 64  & 31.1 & $22.7 \pm 1.1$ & 518 \\
+        SLAE & 16 & 128 & 31.2 & $22.7 \pm 1.0$ & 534 \\
+        SLAE & 32 & 64  & 62.2 & $27.9 \pm 1.4$ & 794 \\
         \midrule
-        LLAE & 16 & 32  & \pend{$19.0 \pm 1.1$} &  \pend{56} & \pend{525} \\
-        LLAE & 16 & 64  & \pend{$19.4$--$20.1$} & \pend{52--54} & \pend{525} \\
-        LLAE & 16 & 128 & \pend{$19.0 \pm 0.8$} &  \pend{56} & \pend{525} \\
+        LLAE & 8  & 64  & 54.2 & $26.8 \pm 2.1$ & 556 \\
+        LLAE & 16 & 32  & 53.7 & $26.9 \pm 1.8$ & 550 \\
+        LLAE & 16 & 64  & 54.2 & $27.0 \pm 1.7$ & 556 \\
+        LLAE & 16 & 128 & 55.2 & $27.2 \pm 2.0$ & 568 \\
+        LLAE & 32 & 64  & 54.2 & $27.1 \pm 1.9$ & 556 \\
         \bottomrule
     \end{tabular}
-    \caption{Inference benchmark on an NVIDIA RTX A5000. Latency: batch size 1, 50 timed CUDA Event runs after 10 warm-up runs. Throughput at maximum GPU-filling batch size. \pend{Blue entries are pending re-measurement.}}
+    \caption{Reconstruction cost at $\gamma = 0.01$. GFLOPs are counted on the executed graph for one sample. Latency: batch size 1, 50 timed CUDA Event runs after 10 warm-up runs, median $\pm$ standard deviation. Peak GPU memory is the maximum allocated during one reconstruction. Best per column in bold. SLAE's arithmetic and memory scale with $K$; LLAE's are flat, the decoder running over the $N_t$ time frames whatever the number of Laplace coefficients.}
     \label{tab:bench}
 \end{table}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{ae_inference_bench.png}
-    \caption{\pend{Inference benchmark on an NVIDIA RTX A5000. Left: per-sample latency (batch size 1, 50 CUDA Event runs). Right: throughput at maximum GPU-filling batch size.}}
+    \includegraphics[width=0.49\textwidth]{ae_bench_flops}
+    \hfill
+    \includegraphics[width=0.49\textwidth]{ae_bench_latency}
+    \caption{Reconstruction cost for all 14 AE checkpoints (batch size 1). Left: arithmetic work per sample, which separates the two families cleanly --- SLAE grows with $K$, LLAE is flat. Right: wall-clock latency, which does not, the SLAE pipeline evaluating its Laplace transform pair in double precision on the host. LLAE in red, SLAE in blue.}
     \label{fig:bench}
 \end{figure}
 
@@ -898,14 +923,8 @@ Table~\ref{tab:surr_results} reports the relative $L^2$ error on the held-out te
 \end{table}
 
 \paragraph{Overall accuracy.}
-LLAE achieves 4.13--4.63\% median $L^2$ error across all configurations, compared to 5.69--11.61\% for SLAE. The best LLAE surrogate ($d_z=128$, $K=16$, $\gamma=0.01$, 4.13\%) represents a $\mathbf{54\%}$ reduction in median error relative to the best POD surrogate (8.91\%), while the best SLAE surrogate ($d_z=64$, $K=32$, $\gamma=0.01$, 5.69\%) achieves a $\mathbf{36\%}$ reduction. Figure~\ref{fig:surr_bar} summarises all 14 checkpoints sorted by median error.
+LLAE achieves 4.13--4.63\% median $L^2$ error across all configurations, compared to 5.69--11.61\% for SLAE. The best LLAE surrogate ($d_z=128$, $K=16$, $\gamma=0.01$, 4.13\%) represents a $\mathbf{54\%}$ reduction in median error relative to the best POD surrogate (8.91\%), while the best SLAE surrogate ($d_z=64$, $K=32$, $\gamma=0.01$, 5.69\%) achieves a $\mathbf{36\%}$ reduction.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{surr_bar.png}
-    \caption{Surrogate checkpoint comparison: median $L^2$ relative error on the test set ($n=1620$), sorted by median with IQR error bars. LLAE (red) achieves 4.1--4.6\%, SLAE (blue) 5.7--11.6\%. The best POD surrogate (8.91\%) is indicated by a dashed horizontal line for reference.}
-    \label{fig:surr_bar}
-\end{figure}
 
 \paragraph{End-to-end fine-tuning effect.}
 The Gap column reveals a qualitative asymmetry between the two families. For LLAE, the surrogate step introduces a small positive overhead of $+0.83$ to $+1.44$\,pp above the AE reconstruction floor: the surrogate approximation is not perfectly lossless, but the cost is modest given that the AE floor itself already saturates below 3.5\%.
@@ -915,13 +934,52 @@ For SLAE, by contrast, the Gap is \emph{negative} across all configurations, ran
 \paragraph{Hyperparameter sensitivity.}
 LLAE surrogates remain highly robust: varying $K$ from 8 to 32, $d_z$ from 32 to 128, or $\gamma$ from 0 to 0.01 all yield errors in a tight 4.13--4.63\% band, consistent with the insensitivity already observed at the AE level (Section~\ref{sec:ae_perf}). SLAE is more sensitive: $K=8$ collapses to 11.61\% (the spectral truncation is too severe for the surrogate to compensate), while $K=32$ is the best SLAE configuration precisely because the decoder, given access to 32 Laplace frequencies, can recover finer spatial structure during fine-tuning. Ablation violin plots are provided in Appendix~\ref{app:surr_ablation}.
 
-\paragraph{Inference latency.}
-The surrogate MLP (architecture detailed in Appendix~\ref{app:architecture}) adds negligible latency to the AE decoding pipeline: measured on an NVIDIA RTX A5000, SLAE at $K=16$ runs at $8.4 \pm 0.1$\,ms per sample and LLAE at $18.3 \pm 0.7$\,ms, virtually identical to the AE-only figures reported in Table~\ref{tab:bench} and consistent with the linear projection cost dominating over the network forward pass. SLAE therefore preserves its ${\approx}2.2\times$ latency advantage over LLAE. Figure~\ref{fig:surr_bench} details the latency breakdown across all 14 checkpoints.
+\paragraph{Where the error lives in the design.}
+The parameter design is factorial --- 15 values of $k$ crossed with 15 of $C$ and 36 injection angles $\phi$, the angle being a numerical rotation of the same base solution (Section~\ref{sec:problem_setting}) --- so an aggregate median mixes three directions of very unequal difficulty. Table~\ref{tab:eta2} decomposes the variance of the per-instance error with the correlation ratio $\eta^2$, the fraction of $\mathrm{Var}(\varepsilon)$ explained by each factor.
+
+The angle explains almost nothing: $\eta^2_\phi = 0.02$--$0.03$ for every checkpoint of both families, against $0.13$--$0.26$ for $k$ and $0.53$--$0.74$ for $C$. The error is therefore essentially flat over the 36 rotations and is carried by the two physical parameters, $C$ foremost. Figure~\ref{fig:doe_map} shows the corresponding maps: the upper decile is not scattered but confined to the low-$C$, low-$k$ corner of the design, where reaction and diffusion are slowest and the front takes longest to establish. What Section~\ref{sec:surr_results} describes as occasional failure cases is thus a identifiable physical regime rather than dispersion.
+
+Two cautions on reading this. A flat dependence on $\phi$ does \emph{not} establish that the aggregate is free of the optimism the rotation augmentation induces: the partition is random over the 8100 augmented instances, so the training set almost certainly contains the same base $(k, C)$ at other angles, and $\eta^2$ cannot see that. It measures how error varies \emph{within} the design, not what a group-wise partition would give. Second, $\eta^2$ is a variance decomposition of a strongly right-skewed quantity and is best read as an ordering of the three factors, not as an exact budget.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Checkpoint} & $\eta^2_\phi$ & $\eta^2_k$ & $\eta^2_C$ \\
+        \midrule
+        LLAE $d_z=128$, $K=16$ & 0.027 & 0.264 & \textbf{0.529} \\
+        LLAE $d_z=64$,  $K=16$ & 0.028 & 0.258 & \textbf{0.572} \\
+        LLAE $d_z=64$,  $K=8$  & 0.028 & 0.242 & \textbf{0.568} \\
+        \midrule
+        LLAE learnable, $K=8$  & 0.025 & 0.185 & \textbf{0.690} \\
+        LLAE learnable, $K=16$ & 0.022 & 0.136 & \textbf{0.737} \\
+        LLAE learnable, $K=32$ & 0.021 & 0.127 & \textbf{0.755} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Correlation ratio $\eta^2$ of the per-instance relative $L^2$ error against each design factor, on the test set ($n=1620$). $k$ and $C$ are binned into eight quantiles; $\phi$ is used at its 36 levels. Values sum to less than one because the factors do not exhaust the variance. The injection angle explains two to three percent throughout.}
+    \label{tab:eta2}
+\end{table}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{surr_bench.png}
-    \caption{Surrogate inference benchmark (NVIDIA RTX A5000, 50 CUDA Event timed runs, batch size 1). Left: per-sample latency by model family and $K$. Right: accuracy--latency scatter (median $L^2$ error vs.\ latency).}
+    \includegraphics[width=\textwidth]{surr_doe_map_llae}
+    \caption{Error over the design of experiments for the best LLAE surrogate. Left: error against the injection angle $\phi$, with the median per angle in black --- flat across the 36 rotations. Centre: error over the physical plane $(k, C)$, colour encoding the relative $L^2$ error. Right: location of the upper decile, which occupies the low-$C$ band rather than being dispersed over the design.}
+    \label{fig:doe_map}
+\end{figure}
+
+\paragraph{Inference cost.}
+The surrogate is the deployed object, and it is also where the two cost axes finally agree. Predicting the Laplace coefficients from $\vmu$ removes the forward transform entirely --- the surrogate emits $\hat{U}(s_k)$ directly and pays only the inversion --- so the implementation asymmetry that clouded the reconstruction comparison (Section~\ref{sec:ae_perf}) disappears. Measured at batch size 1, SLAE at $K=16$ requires $30.3$\,GFLOPs and $15.6 \pm 0.3$\,ms per sample against $48.2$\,GFLOPs and $22.0 \pm 4.2$\,ms for LLAE: $1.59\times$ less arithmetic, $1.41\times$ less wall-clock time and $2.6\times$ less peak memory ($235$ against $622$\,MB). The surrogate MLP itself is negligible in this budget --- LLAE's FLOPs are identical at $K = 8$, $16$ and $32$ ($48.2$\,GFLOPs), confirming that the decoder, not the predictor, sets the cost. At $K=8$ SLAE drops to $15.2$\,GFLOPs and $12.0 \pm 0.1$\,ms, and at $K=32$ it rises to $60.7$\,GFLOPs and $23.2 \pm 0.7$\,ms, crossing LLAE at both ends of the sweep. The measurements also differ in dispersion by an order of magnitude --- $0.1$--$0.7$\,ms for SLAE against $2.8$--$4.2$ for LLAE --- the $K$ frequency frames being decoded in one batch where the $150$ time frames are not. Figure~\ref{fig:surr_bench} gives the full breakdown across the 14 checkpoints.
+
+The POD surrogate is instructive as a lower bound: at $K=16$, $k_{\mathrm{pod}}=64$ it consumes $0.2$\,GFLOPs, some $150\times$ less than SLAE, yet runs at $10.1$\,ms --- only $1.5\times$ faster --- on $212$\,MB, comparable to SLAE's $235$. Almost all of its time and memory go to the Tikhonov inversion and the back-projection through $\bm{V}^{(k)}$, not to the predictor. The inversion is thus a fixed toll that every Laplace-domain pipeline pays, and it bounds how much any reduction in network cost can buy at this problem size.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.49\textwidth]{surr_bench_flops}
+    \hfill
+    \includegraphics[width=0.49\textwidth]{surr_bench_latency}
+    \caption{End-to-end surrogate cost for the 14 checkpoints (batch size 1, 50 timed CUDA Event runs). Left: arithmetic work per sample. Right: wall-clock latency. Unlike the reconstruction stage (Figure~\ref{fig:bench}), the two axes agree here: the surrogate applies no forward transform, so SLAE's fewer operations translate into proportionally lower latency.}
     \label{fig:surr_bench}
 \end{figure}
 
@@ -980,14 +1038,8 @@ Table~\ref{tab:ae_svd_surr_results} reports the relative $L^2$ error on the held
 \end{table}
 
 \paragraph{Does compressing the latent space help?}
-The central question is whether predicting on a smaller, orthogonalised latent space simplifies the MLP's task enough to offset the information lost to SVD truncation. It does not. Measured \emph{at matching autoencoder configuration}, the SVD bottleneck adds a small penalty over the direct surrogate for both families: fixing $d_z=64$, $\gamma=0.01$, the best LLAE-SVD ($K=16$, $k_{\mathrm{svd}}=32$, 4.24\%) sits $+0.06$\,pp above its direct counterpart (4.18\%), and the best SLAE-SVD ($K=32$, $k_{\mathrm{svd}}=32$, 6.03\%) $+0.34$\,pp above its own (5.69\%). The MLP navigates the full $d_z$-dimensional latent space perfectly well, so the SVD projection merely discards spatial detail the direct surrogate had already learned to predict — compressing the latent before the surrogate degrades the reconstruction rather than helping it. Figure~\ref{fig:svd_surr_medians} collects the per-checkpoint medians.
+The central question is whether predicting on a smaller, orthogonalised latent space simplifies the MLP's task enough to offset the information lost to SVD truncation. It does not. Measured \emph{at matching autoencoder configuration}, the SVD bottleneck adds a small penalty over the direct surrogate for both families: fixing $d_z=64$, $\gamma=0.01$, the best LLAE-SVD ($K=16$, $k_{\mathrm{svd}}=32$, 4.24\%) sits $+0.06$\,pp above its direct counterpart (4.18\%), and the best SLAE-SVD ($K=32$, $k_{\mathrm{svd}}=32$, 6.03\%) $+0.34$\,pp above its own (5.69\%). The MLP navigates the full $d_z$-dimensional latent space perfectly well, so the SVD projection merely discards spatial detail the direct surrogate had already learned to predict — compressing the latent before the surrogate degrades the reconstruction rather than helping it.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.8\textwidth]{svd_surr_medians.png}
-    \caption{AE+SVD surrogate checkpoint comparison: median $L^2$ relative error with IQR error bars, grouping by model family. LLAE achieves 4.2--6.5\%, SLAE 6.0--12.0\%.}
-    \label{fig:svd_surr_medians}
-\end{figure}
 
 \paragraph{Impact of $k_{\mathrm{svd}}$.}
 To quantify the benefit of retaining a larger number of SVD modes, we compare pairs of configurations differing only in $k_{\mathrm{svd}}$ (16 vs.\ 32). Figure~\ref{fig:svd_surr_ksvd_impact} highlights that setting $k_{\mathrm{svd}}=32$ systematically improves the surrogate's accuracy across all models (all points lie below the $y=x$ diagonal). The gain is significantly more pronounced for LLAE models (between $+1.06$ and $+1.94$\,pp reduction in median error) than for SLAE models ($+0.33$ to $+0.93$\,pp), indicating that LLAE latent spaces contain more useful fine-grained information captured by the additional 16 SVD modes, whereas SLAE may inherently discard spatial details at the AE stage, limiting the potential gains of a larger $k_{\mathrm{svd}}$.
@@ -1003,12 +1055,12 @@ To quantify the benefit of retaining a larger number of SVD modes, we compare pa
 Sensitivity to the AE hyperparameters $K$, $d_z$, and $\gamma$ mirrors the direct case (Section~\ref{sec:direct_surr}): SLAE again degrades sharply at $K=8$ (11.6--12.0\%), while LLAE stays within a tight band. The lever specific to this pipeline is $k_{\mathrm{svd}}$, whose effect is quantified above: retaining 32 rather than 16 modes is uniformly beneficial, and more so for LLAE than for SLAE.
 
 \paragraph{Inference latency.}
-Introducing the SVD decoding step (matrix multiplication) between the MLP prediction and the spatial decoder adds a slight computational overhead. Measured on an NVIDIA RTX A5000 (batch size 1), LLAE-SVD requires approximately 22\,ms per sample, while SLAE-SVD requires about 9\,ms per sample. The SLAE-SVD model maintains its pronounced speed advantage (${\approx}2.4\times$) over LLAE-SVD, reflecting its lighter decoder architecture. The trade-off between latency and median error for AE+SVD surrogates is presented in Figure~\ref{fig:svd_surr_latency}.
+Introducing the SVD decoding step (matrix multiplication) between the MLP prediction and the spatial decoder adds a slight computational overhead. Measured at batch size 1, LLAE-SVD requires approximately 22\,ms per sample, while SLAE-SVD requires about 9\,ms per sample. The SLAE-SVD model maintains its pronounced speed advantage (${\approx}2.4\times$) over LLAE-SVD, reflecting its lighter decoder architecture. The trade-off between latency and median error for AE+SVD surrogates is presented in Figure~\ref{fig:svd_surr_latency}.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{svd_surr_latency.png}
-    \caption{AE+SVD surrogate inference benchmark (NVIDIA RTX A5000). Left: per-sample latency across checkpoints. Right: accuracy--latency scatter representing median $L^2$ error vs.\ latency.}
+    \caption{AE+SVD surrogate inference benchmark (batch size 1). Left: per-sample latency across checkpoints. Right: accuracy--latency scatter representing median $L^2$ error vs.\ latency.}
     \label{fig:svd_surr_latency}
 \end{figure}
 \subsubsection{Tucker surrogates: joint-mode latent compression}
@@ -1053,22 +1105,16 @@ where $\Pi = U^{(s)}U^{(s)\top}(\cdot)\,U^{(z)}U^{(z)\top}$ is the Tucker projec
           & 8 &  8 & 0.062 &          9.96 & 11.05 & 16.00 & 80.05 & 7.16 & 7.5 \\
         \bottomrule
     \end{tabular}
-    \caption{Tucker surrogate results on the test set ($n = 1620$), sorted by median error within each family. $\rho = r_s r_z / (K d_z)$ is the compression ratio of the surrogate target relative to the direct pipeline. $\varepsilon_{\mathrm{trunc}}$: median latent-energy discarded by the rank truncation (factors only). $\varepsilon_{\mathrm{reg}}$: median relative error of the predicted core (surrogate only). \emph{Lat}: GPU inference latency at batch size 1 (NVIDIA RTX A5000). Best median per family in bold.}
+    \caption{Tucker surrogate results on the test set ($n = 1620$), sorted by median error within each family. $\rho = r_s r_z / (K d_z)$ is the compression ratio of the surrogate target relative to the direct pipeline. $\varepsilon_{\mathrm{trunc}}$: median latent-energy discarded by the rank truncation (factors only). $\varepsilon_{\mathrm{reg}}$: median relative error of the predicted core (surrogate only). \emph{Lat}: GPU inference latency at batch size 1. Best median per family in bold.}
     \label{tab:tucker_surr_results}
 \end{table}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{tucker_grid.png}
-    \caption{Median field error over the Tucker rank grid $(r_s, r_z)$ (test set, $n = 1620$), for LLAE-Tucker (left) and SLAE-Tucker (right). Both panels share the same colour scale. The latent-mode rank $r_z$ (horizontal) drives the error far more than the frequency-mode rank $r_s$ (vertical).}
-    \label{fig:tucker_grid}
-\end{figure}
 
 \paragraph{Overall accuracy.}
 As with SVD, the relevant question is what the extra compression costs relative to the direct and single-mode pipelines \emph{at matching autoencoder configuration}. Fixing the shared AE ($d_z=64$, $K=16$, $\gamma=0.01$), the median error grows only gently along the compression axis: $4.18\% \to 4.24\% \to 4.33\%$ for LLAE (direct $\to$ SVD with $k_{\mathrm{svd}}=32$ $\to$ Tucker with $r_s=8$, $r_z=32$), and $7.59\% \to 7.90\% \to 7.92\%$ for SLAE. Tucker thus adds at most $+0.15$\,pp over the direct surrogate and $+0.09$\,pp over SVD — while shrinking the surrogate target to $r_s r_z = 256$ scalars, a $4\times$ reduction over the direct target ($K d_z = 1024$) and a $2\times$ reduction over the SVD target ($K k_{\mathrm{svd}} = 512$). Factorising both modes at once is what buys this: exploiting cross-frequency correlations lets Tucker match the single-mode SVD accuracy at half the target dimension.
 
 \paragraph{Rank sensitivity: $r_z$ dominates $r_s$.}
-The grid of Figure~\ref{fig:tucker_grid} is strongly anisotropic, and this is the most informative outcome of the sweep. Increasing the latent-mode rank $r_z$ from 8 to 32 nearly halves the LLAE error (6.85\% $\to$ 4.33\% at $r_s=8$), and the SLAE error falls in step (9.96\% $\to$ 7.92\%). Doubling the frequency-mode rank $r_s$ from 4 to 8, by contrast, barely moves either ($4.57\% \to 4.33\%$ for LLAE, $8.15\% \to 7.92\%$ for SLAE at $r_z=32$) — an effect an order of magnitude smaller. The rank sweeps of Figure~\ref{fig:tucker_rank_sweep} confirm the pattern distributionally: the $r_z$ violins separate cleanly while the $r_s$ violins overlap almost completely.
+The rank grid of Table~\ref{tab:tucker_surr_results} is strongly anisotropic, and this is the most informative outcome of the sweep. Increasing the latent-mode rank $r_z$ from 8 to 32 nearly halves the LLAE error (6.85\% $\to$ 4.33\% at $r_s=8$), and the SLAE error falls in step (9.96\% $\to$ 7.92\%). Doubling the frequency-mode rank $r_s$ from 4 to 8, by contrast, barely moves either ($4.57\% \to 4.33\%$ for LLAE, $8.15\% \to 7.92\%$ for SLAE at $r_z=32$) — an effect an order of magnitude smaller. The rank sweeps of Figure~\ref{fig:tucker_rank_sweep} confirm the pattern distributionally: the $r_z$ violins separate cleanly while the $r_s$ violins overlap almost completely.
 
 The interpretation reaches beyond this ablation. A rank-4 basis over the frequency mode already captures almost all of the joint variation of the $K=16$ Laplace coefficients across the training set: the spectral representation is redundant enough that discarding three quarters of its dimensions costs nothing measurable. The $d_z=64$ latent channels behave in the opposite way — they carry richer, less redundant information that a rank-8 basis truncates too aggressively. A tensor factorisation, fitted blind to the physics on training statistics alone, thus rediscovers the premise of this work: the Laplace representation is intrinsically compact along the frequency axis, and $K=16$ already sits close to its useful floor. That this evidence arrives from a direction independent of the argument which motivated the transform is what makes it worth reporting.
 
@@ -1076,7 +1122,7 @@ In practice $r_s=4$ is the parameter-efficient choice: it halves the surrogate s
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{tucker_rank_sweep.png}
+    \includegraphics[width=\textwidth]{tucker_rank_sweep}
     \caption{Tucker rank sweeps (test set, violin plots pooled over the other rank; black line = median, dashed orange = mean). Top row LLAE-Tucker, bottom row SLAE-Tucker; left column effect of $r_s$, right column effect of $r_z$. The latent-mode rank $r_z$ separates the distributions, the frequency-mode rank $r_s$ does not.}
     \label{fig:tucker_rank_sweep}
 \end{figure}
@@ -1086,7 +1132,7 @@ The two decoder-free diagnostics of Table~\ref{tab:tucker_surr_results}, shown i
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{tucker_error_decomp.png}
+    \includegraphics[width=\textwidth]{tucker_error_decomp}
     \caption{Error decomposition for LLAE-Tucker (left) and SLAE-Tucker (right): median latent truncation error $\varepsilon_{\mathrm{trunc}}$, core regression error $\varepsilon_{\mathrm{reg}}$, and physical-field error $\varepsilon_{\mathrm{field}}$ for each $(r_s, r_z)$ pair (log scale). The field error follows the truncation error, not the regression error.}
     \label{fig:tucker_error_decomp}
 \end{figure}
@@ -1096,7 +1142,7 @@ Figure~\ref{fig:tucker_pareto} plots the field error against the compression rat
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{tucker_pareto.png}
+    \includegraphics[width=\textwidth]{tucker_pareto}
     \caption{Left: median field error vs.\ compression ratio $\rho = r_s r_z / (K d_z)$ (dashed line = Pareto front per family; points sharing a ratio differ in $(r_s, r_z)$). Right: median field error vs.\ trainable surrogate parameters.}
     \label{fig:tucker_pareto}
 \end{figure}
@@ -1104,13 +1150,15 @@ Figure~\ref{fig:tucker_pareto} plots the field error against the compression rat
 \paragraph{Decoder co-adaptation.}
 A subtle consequence of the end-to-end fine-tuning (Section~\ref{sec:direct_surr}) is worth flagging. Because the decoder is jointly updated during surrogate training (\texttt{lr\_decoder}${=}5\times10^{-5}$), it can co-adapt to the distribution of \emph{predicted} cores rather than the true ones. We probe this by decoding the exact projected core in place of the surrogate's prediction: if the decoder had not co-adapted, the exact core would yield a lower error and serve as a valid oracle lower bound. For LLAE-Tucker the substitution is neutral ($+0.07$\,pp), so the oracle bound holds. For SLAE-Tucker, however, decoding the exact core \emph{raises} the error sharply ($+11.1$\,pp on the probe subsample at $r_s=8$, $r_z=16$): the SLAE decoder has specialised to the predicted-core distribution, exactly the mechanism that produced the negative surrogate Gap for SLAE in Section~\ref{sec:direct_surr}. A physical-space oracle is therefore not a valid lower bound for SLAE-Tucker, which is why the truncation and regression diagnostics above are computed in the latent space, where they remain decoder-independent.
 
-\paragraph{Inference latency.}
-The Tucker back-projection ($U^{(s)}\hat{\mathcal{G}}U^{(z)\top}$, two small matrix products) is negligible in the inference budget. Measured on an NVIDIA RTX A5000 at batch size 1 (Figure~\ref{fig:tucker_bench}), LLAE-Tucker runs at ${\sim}18$\,ms per sample and SLAE-Tucker at ${\sim}7$\,ms, essentially independent of the ranks and virtually identical to the direct and SVD pipelines. SLAE-Tucker thus preserves the ${\approx}2.4\times$ latency advantage of its lighter decoder, at the cost of the higher error floor discussed above.
+\paragraph{Inference cost.}
+The Tucker back-projection ($U^{(s)}\hat{\mathcal{G}}U^{(z)\top}$, two small matrix products) is negligible in the inference budget, and the measurements make this unusually clear: across the twelve checkpoints, the FLOP count is \emph{constant} within each family --- $30.3$\,GFLOPs for every SLAE-Tucker and $48.2$ for every LLAE-Tucker --- although the ranks vary by a factor of eight in $r_z$ and two in $r_s$. Compressing the surrogate target changes what the predictor must learn, not what the decoder must compute. Latency follows suit (Figure~\ref{fig:tucker_bench}): ${\approx}15$\,ms for SLAE-Tucker and ${\approx}24$\,ms for LLAE-Tucker at batch size 1, essentially independent of the ranks and within $3\%$ of the direct pipelines of Section~\ref{sec:direct_surr}. SLAE-Tucker thus keeps the $1.6\times$ arithmetic and $1.6\times$ wall-clock advantage of its lighter decoder, at the cost of the higher error floor discussed above --- and the rank reduction, whose entire purpose was to lower cost, buys none.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{tucker_bench.png}
-    \caption{Tucker surrogate inference benchmark (NVIDIA RTX A5000, 50 CUDA Event timed runs, batch size 1). Left: per-checkpoint latency. Right: accuracy--latency scatter. Latency is set by the decoder family, not the Tucker ranks.}
+    \includegraphics[width=0.49\textwidth]{tucker_bench_flops}
+    \hfill
+    \includegraphics[width=0.49\textwidth]{tucker_bench_latency}
+    \caption{Tucker surrogate inference benchmark (50 CUDA Event timed runs, batch size 1). Left: per-checkpoint latency. Right: accuracy--latency scatter. Latency is set by the decoder family, not the Tucker ranks.}
     \label{fig:tucker_bench}
 \end{figure}
 
@@ -1119,7 +1167,7 @@ Per-checkpoint error histograms for all 12 Tucker surrogates are provided in App
 \subsection{Optimal Laplace contour choice}
 \label{sec:contour_results}
 
-The results reported so far all rest on a prescribed integration contour: $\omega_k$ set to the $K$ leading Fourier modes of the time grid, uniform abscissa $\sigma_k = \gamma$, and $(\alpha_t, \lambda)$ fixed a priori. We now assess the two contour-selection strategies of Section~\ref{sec:contour_optim}, which differ in when and against what criterion the contour is determined: the \emph{learnable} contour of LLAE, where $(\sigma_k, \omega_k, \alpha_t, \lambda)$ are treated as parameters of the model and optimised jointly with the autoencoder, and the \emph{offline} contour of SLAE, determined before any training by minimising the bias--amplification proxy~\eqref{eq:proxy}. Six configurations are trained, one per (family, $K$) pair with $K \in \{8, 16, 32\}$, all at $d_z = 64$; architecture, optimiser, schedule and data partition are held at the values of Sections~\ref{sec:ae_perf}--\ref{sec:direct_surr}, so that each configuration differs from its prescribed-contour counterpart by the contour alone. The offline contours are obtained by 500 gradient steps on~\eqref{eq:proxy} at learning rate $5\times10^{-3}$, with $\lambda_{\mathrm{AE}} = 1.25$, $\lambda_{\Delta t} = \lambda_{\Delta x} = 0.5$, rank $d_z = 64$ for the SVD residual, the bias term estimated over 100 training instances, and the abscissae constrained to $\sigma_k \geq -0.05$; the resulting triple is then held fixed throughout both phases.
+The results reported so far all rest on a prescribed integration contour: $\omega_k$ set to the $K$ leading Fourier modes of the time grid, uniform abscissa $\sigma_k = \gamma$, and $(\alpha_t, \lambda)$ set a priori and never tuned. The comparison of this section is therefore between two \emph{triplets} $(s_k, \alpha_t, \lambda)$, one conventional and one optimised, and not between two placements of the poles at equal regularisation (Section~\ref{sec:contour_optim}). We assess the two selection strategies of Section~\ref{sec:contour_optim}, which differ in when and against what criterion the triplet is determined: the \emph{learnable} contour of LLAE, where $(\sigma_k, \omega_k, \alpha_t, \lambda)$ are treated as parameters of the model and optimised jointly with the autoencoder, and the \emph{offline} contour of SLAE, determined before any training by minimising the bias--amplification proxy~\eqref{eq:proxy}. Six configurations are trained, one per (family, $K$) pair with $K \in \{8, 16, 32\}$, all at $d_z = 64$; architecture, optimiser, schedule and data partition are held at the values of Sections~\ref{sec:ae_perf}--\ref{sec:direct_surr}, so that each configuration differs from its prescribed counterpart by the triplet alone. The offline contours are obtained by 500 AdamW steps on~\eqref{eq:proxy} (learning rate $5\times10^{-3}$ on plateau decay, weight decay $10^{-4}$, gradient clipping at $1.0$, double precision), with $\lambda_{\mathrm{AE}} = 1.25$, $\lambda_{\Delta t} = \lambda_{\Delta x} = 0.5$, rank $d_z = 64$ for the SVD residual, and both terms evaluated over the same $N_{\mathrm{opt}} = 100$ training instances sampled at a single rotation angle. The poles are initialised on the prescribed Bromwich contour at $\gamma = 0$ and $(\alpha_t, \lambda)$ at $10^{-3}$; all four are optimised jointly under the box constraints $\sigma_k \geq -0.05$, $\omega_k \geq 0$ and $\alpha_t, \lambda \in [10^{-6}, 1]$. The resulting triple $(s_k, \alpha_t, \lambda)$ is then held fixed throughout both phases --- it defines the Laplace-domain dataset, the inversion inside the surrogate, and the inversion at inference alike.
 
 \paragraph{Geometry of the optimised contours.}
 Figure~\ref{fig:contour_poles} displays the resulting sampling points in the complex plane alongside their prescribed counterparts. Both strategies displace the contour in the same qualitative direction and by a substantial margin: departing from the imaginary axis, the abscissae acquire a positive real part ($\sigma_k \approx 0.05$--$0.06$ for LLAE at $K=16$, $\approx 0.035$ for SLAE), so that the optimised contour is a genuine Bromwich contour displaced into the right half-plane rather than a purely oscillatory one, while the imaginary parts are concurrently dilated, widening the spectral window sampled by the transform.
@@ -1128,8 +1176,8 @@ The two strategies nonetheless select markedly different regularisation regimes.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{optae_cell12_00.png}\\[0.6em]
-    \includegraphics[width=\textwidth]{optae_cell12_01.png}
+    \includegraphics[width=\textwidth]{optae_contour_poles_llae}\\[0.6em]
+    \includegraphics[width=\textwidth]{optae_contour_poles_slae}
     \caption{Optimised Laplace contours in the complex plane ($d_z=64$, $K \in \{8,16,32\}$). Circles: prescribed sampling points on the truncated Bromwich contour; stars: optimised points, joined to their prescribed position by a grey segment; colour encodes the frequency index $k$. Top row: LLAE learnable contour, optimised jointly with the autoencoder. Bottom row: SLAE offline contour, obtained by minimising the proxy~\eqref{eq:proxy}. The associated $(\alpha_t, \lambda)$ are reported in each panel title.}
     \label{fig:contour_poles}
 \end{figure}
@@ -1185,20 +1233,20 @@ This is not overfitting in the usual sense: the learnable contour improves the r
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.49\textwidth]{optsurr_cell20_04.png}
+    \includegraphics[width=0.49\textwidth]{optsurr_violins_llae}
     \hfill
-    \includegraphics[width=0.49\textwidth]{optsurr_cell20_05.png}
+    \includegraphics[width=0.49\textwidth]{optsurr_violins_slae}
     \caption{End-to-end error distributions under the optimised contour, as a function of the number of Laplace frequencies $K$ ($d_z=64$, test set, $n=1620$). Left: LLAE, learnable contour. Right: SLAE, offline contour. Black line: median; dashed orange line: mean. The two families exhibit opposite dependences on $K$: the LLAE distributions are indistinguishable across a fourfold variation of $K$, whereas the SLAE distributions shift downward and contract markedly as $K$ increases, the upper tail being reduced from ${\approx}28$\% at $K=8$ to ${\approx}13$\% at $K=32$.}
     \label{fig:contour_violins}
 \end{figure}
 
-\paragraph{Inference latency.}
-Contour optimisation modifies only the numerical values of $(s_k, \alpha_t, \lambda)$, leaving every tensor dimension unchanged, and is therefore free at inference. \pend{The measurements confirm this: at $K = 8, 16, 32$ respectively, SLAE evaluates in $27$, $41$ and $76$\,ms per instance, and LLAE in $114$--$120$\,ms irrespective of $K$ (batch size 1, 50 timed runs). These absolute values are not comparable with those of Table~\ref{tab:bench} and Section~\ref{sec:direct_surr}, having been obtained on a different and more heavily loaded device; the meaningful quantity is the ratio between families, and SLAE retains an advantage of approximately $2.9\times$ at $K=16$, consistent with the $2.2$--$2.4\times$ measured elsewhere.} Contour optimisation thus displaces the SLAE accuracy--cost Pareto front strictly downward.
+\paragraph{Inference cost.}
+Contour optimisation modifies only the numerical values of $(s_k, \alpha_t, \lambda)$, leaving every tensor dimension unchanged, and is therefore free at inference. The measurements confirm this to the digit: the optimised-contour surrogates consume exactly the arithmetic of their prescribed-contour counterparts --- $15.2$, $30.3$ and $60.7$\,GFLOPs for SLAE at $K = 8$, $16$, $32$, and $48.2$\,GFLOPs for LLAE irrespective of $K$ --- and evaluate in $11.9$, $15.5$ and $22.9$\,ms respectively for SLAE against $23.4$--$24.3$\,ms for LLAE (batch size 1, 50 timed CUDA Event runs on the idle benchmarking GPU). At $K=16$ SLAE retains a $1.6\times$ arithmetic and $1.5\times$ wall-clock advantage, on $2.6\times$ less memory. Contour optimisation thus displaces the SLAE accuracy--cost Pareto front strictly downward: the accuracy improves at every $K$ while the cost, along all three axes, is unchanged.
 
 \paragraph{Assessment of the two strategies.}
-Taken together, the two procedures constitute a controlled comparison of \emph{objectives} rather than of optimisers, and each delivers precisely what its objective encodes. The learnable contour is optimised against the reconstruction of exact coefficients; it yields the most accurate autoencoder of the entire study (2.61\%) and leaves the end-to-end error unchanged. The offline proxy is the only one of the two criteria evaluated at the magnitude of coefficient error the surrogate actually incurs, and it is the only one to improve the deployed pipeline --- at every $K$, by up to $1.85$\,pp. Since both strategies displace the sampling points comparably (Figure~\ref{fig:contour_poles}), the discriminating ingredient is not the displacement itself but the regime in which~\eqref{eq:proxy} weighs it: a contour that sharpens the representation and a contour that keeps it learnable are not the same contour, and only the second governs what the emulator ultimately delivers.
+Taken together, the two procedures constitute a controlled comparison of \emph{objectives} rather than of optimisers, and each delivers precisely what its objective encodes. The learnable contour is optimised against the reconstruction of exact coefficients; it yields the most accurate Laplace autoencoder of the study (2.61\%, second only to the Laplace-free DL-ROM reconstruction of Table~\ref{tab:dlrom_stages}) and leaves the end-to-end error unchanged. The offline proxy is the only one of the two criteria evaluated at the magnitude of coefficient error the surrogate actually incurs, and it is the only one to improve the deployed pipeline --- at every $K$, by up to $1.85$\,pp. Since both strategies displace the sampling points comparably (Figure~\ref{fig:contour_poles}), the discriminating ingredient is not the displacement itself but the regime in which~\eqref{eq:proxy} weighs it: a contour that sharpens the representation and a contour that keeps it learnable are not the same contour, and only the second governs what the emulator ultimately delivers.
 
-This asymmetry is what makes the offline procedure the more consequential of the two, and two properties compound its practical value. It requires no network training whatsoever --- 500 gradient steps on a purely linear-algebraic functional evaluated over 100 instances, against a complete two-phase training for every candidate contour were the selection to be made empirically --- and it is free at inference, since it alters no tensor dimension. Its effect on the accuracy--cost trade-off is the principal result of this section: SLAE at $K=32$ attains 5.04\%, within $0.9$\,pp of the most accurate configuration of the entire study (LLAE at 4.13\%) where a prescribed contour left a gap of $1.6$\,pp, while evaluating roughly $1.6\times$ faster; at $K=16$ the speed advantage rises to $2.9\times$ for 7.46\%. The contour, a component fixed by convention in every Laplace-domain reduced-order model we are aware of, thus proves to be a design variable of first order, and one that can be optimised at negligible cost against the error that actually matters.
+This asymmetry is what makes the offline procedure the more consequential of the two, and two properties compound its practical value. It requires no network training whatsoever --- 500 gradient steps on a purely linear-algebraic functional evaluated over 100 instances, against a complete two-phase training for every candidate contour were the selection to be made empirically --- and it is free at inference, since it alters no tensor dimension. Its effect on the accuracy--cost trade-off is the principal result of this section: SLAE at $K=32$ attains 5.04\%, within $0.9$\,pp of the most accurate configuration of the entire study (LLAE at 4.13\%) where a prescribed contour left a gap of $1.6$\,pp, while evaluating roughly $1.5\times$ faster; at $K=16$ the advantage is $1.6\times$ in arithmetic and $1.5\times$ in wall-clock time, for 7.46\%. The regularized inversion --- poles and regularisation weights alike, fixed by convention in every Laplace-domain reduced-order model we are aware of --- thus proves to be a design object of first order, and one that can be optimised at negligible cost against the error that actually matters.
 
 \section{Comparison and Discussion}
 
@@ -1218,31 +1266,31 @@ The three references of this study isolate one ingredient each. POD in the Lapla
             & $N_{\mathrm{surr}}$ & \textbf{Lat.\ (ms)} & \textbf{FLOPs (G)}
             & \textbf{Mem.\ (MB)} & \textbf{Median (\%)} \\
         \midrule
-        POD ($k_{\mathrm{pod}}=64$) & prescribed & $16$  & ---     & ---  & ---  & --- & 8.91 \\
+        POD ($k_{\mathrm{pod}}=64$) & prescribed & $16$  & ---     & \textbf{10.1} & \textbf{0.2}  & \textbf{212} & 8.91 \\
         \midrule
-        DL-ROM                      & ---        & $150$ & 23.50\,M & \pend{60.3} & \pend{48.3} & \pend{927} & \textbf{3.80} \\
+        DL-ROM                      & ---        & $150$ & 23.50\,M & 31.4 & 48.3 & 927 & \textbf{3.80} \\
         \midrule
         \multirow{2}{*}{LLAE}
-          & prescribed & $16$ & 3.48\,M & \pend{73.3} & \pend{48.2} & \pend{622} & 4.18 \\
-          & learnable  & $16$ & 3.48\,M & \pend{69.5} & \pend{48.2} & \pend{621} & 4.63 \\
+          & prescribed & $16$ & 3.48\,M & 23.3 & 48.2 & 622 & 4.18 \\
+          & learnable  & $16$ & 3.48\,M & 24.2 & 48.2 & 621 & 4.63 \\
         \midrule
         \multirow{2}{*}{SLAE}
-          & prescribed & $16$ & 3.22\,M & \pend{29.0} & \pend{30.3} & \pend{235} & 7.59 \\
-          & offline    & $16$ & 3.22\,M & \pend{28.4} & \pend{30.3} & \pend{235} & 7.46 \\
+          & prescribed & $16$ & 3.22\,M & 15.7 & 30.3 & 235 & 7.59 \\
+          & offline    & $16$ & 3.22\,M & 15.7 & 30.3 & 235 & 7.46 \\
         \bottomrule
     \end{tabular}
-    \caption{Synthesis at the common operating point ($d_z = 64$, $K = 16$, $\gamma = 0.01$ for the prescribed contours), test set ($n = 1620$), one $150$-step trajectory per query. \emph{Targets}: number of coefficient blocks the surrogate must predict ($K$ Laplace frequencies, or $N_t$ time steps for the DL-ROM). $N_{\mathrm{surr}}$: surrogate parameters, equation~\eqref{eq:surr_cost}. Latency, FLOPs and peak memory are measured at batch size 1 in a single run on an NVIDIA RTX A5000, and are therefore mutually comparable but not comparable with the absolute values of Table~\ref{tab:bench} and Sections~\ref{sec:direct_surr}, \ref{sec:contour_results}, obtained on other devices. \pend{Blue entries are pending re-measurement on the A5000.} Median errors are those of Tables~\ref{tab:pod_surr_results}, \ref{tab:surr_results} and~\ref{tab:contour_results}.}
+    \caption{Synthesis at the common operating point ($d_z = 64$, $K = 16$, $\gamma = 0.01$ for the prescribed contours), test set ($n = 1620$), one $150$-step trajectory per query. \emph{Targets}: number of coefficient blocks the surrogate must predict ($K$ Laplace frequencies, or $N_t$ time steps for the DL-ROM). $N_{\mathrm{surr}}$: surrogate parameters, equation~\eqref{eq:surr_cost}. Latency, FLOPs and peak memory are measured at batch size 1 on an idle GPU, in a single benchmarking run shared by all rows and therefore mutually comparable. Best per column in bold, excluding accuracy. Median errors are those of Tables~\ref{tab:pod_surr_results}, \ref{tab:surr_results} and~\ref{tab:contour_results}.}
     \label{tab:synthesis}
 \end{table}
 
 Two orderings emerge, and they are not the same. On accuracy, the DL-ROM leads ($3.80$\%), LLAE follows within half a point ($4.18$\%), SLAE trails by a further three points ($7.46$--$7.59$\%), and POD is last ($8.91$\%). The non-linear autoencoder is what buys the bulk of the accuracy: every deep model improves on POD, by $15$ to $57$\% at this operating point and by up to $43$\% for SLAE once its contour is optimised at $K=32$ (Section~\ref{sec:contour_results}). Temporal compression, by contrast, buys nothing in accuracy --- it costs a little, $0.38$\,pp for LLAE and around $3.7$\,pp for SLAE, the price of representing a $150$-step trajectory by $16$ complex coefficients and inverting a truncated spectrum.
 
-\pend{On cost the ordering reverses, and it does so unevenly across axes: SLAE is the cheapest model on all four, the DL-ROM is the most expensive on parameters and memory, and LLAE sits with the DL-ROM on latency and FLOPs while remaining $6.8\times$ lighter in parameters. Figure~\ref{fig:dlrom_cost_axes} shows the corresponding Pareto view. No model dominates: the frontier at $150$-step output is occupied by the DL-ROM (most accurate, most expensive), LLAE (near-equal accuracy at a seventh of the parameters) and SLAE (twice as fast for three points of error), with POD dominated on accuracy by all three.} Section~\ref{sec:accuracy_cost} explains why the latency axis behaves differently from the parameter axis, and why this ranking is not invariant: it is stated at a fixed output resolution, and changing that resolution changes it.
+On cost the ordering reverses, and it does so unevenly across axes. Among the deep models SLAE is the cheapest on all four --- $30.3$\,GFLOPs, $15.7$\,ms, $235$\,MB, $3.22$\,M parameters --- and the DL-ROM the most expensive on all four. LLAE occupies an intermediate position that the two axes describe differently: it matches the DL-ROM's arithmetic to $0.2$\% ($48.2$ against $48.3$\,GFLOPs, the shared decoder being essentially the whole computation) yet runs $1.35\times$ faster ($23.3$ against $31.4$\,ms) on $1.5\times$ less memory, because its surrogate carries $16$ frequency heads instead of $150$ temporal ones. The linear POD is cheaper than everything by a wide margin on arithmetic --- $0.2$\,GFLOPs, some $150\times$ below SLAE --- but only $1.6\times$ faster in wall-clock time and no lighter in memory, the Tikhonov inversion being a floor that no reduction in network cost can go below. Figure~\ref{fig:dlrom_cost_axes} shows the corresponding Pareto view. No model dominates: the frontier at $150$-step output is occupied by the DL-ROM (most accurate, most expensive), LLAE (near-equal accuracy at a seventh of the parameters and $1.35\times$ faster) and SLAE (twice as fast for three points of error), with POD dominated on accuracy by all three. Section~\ref{sec:accuracy_cost} explains why the latency axis behaves differently from the parameter axis, and why this ranking is not invariant: it is stated at a fixed output resolution, and changing that resolution changes it.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{dlrom_cost_axes.png}
-    \caption{\pend{Accuracy against five inference-cost axes at fixed $150$-step output (batch size 1, NVIDIA RTX A5000): surrogate parameters, latency, peak GPU memory, FLOPs and energy. Bottom-left is best. Stars: optimised contours (LLAE learnable, SLAE offline); open diamonds: prescribed contours; green disc: DL-ROM at $N_t = 150$. The dashed line marks the best POD surrogate ($8.91$\%).}}
+    \includegraphics[width=\textwidth]{dlrom_cost_axes}
+    \caption{Accuracy against five inference-cost axes at fixed $150$-step output (batch size 1): surrogate parameters, latency, peak GPU memory, FLOPs and energy. Bottom-left is best. Stars: optimised contours (LLAE learnable, SLAE offline); open diamonds: prescribed contours; green disc: DL-ROM at $N_t = 150$. The dashed line marks the best POD surrogate ($8.91$\%).}
     \label{fig:dlrom_cost_axes}
 \end{figure}
 
@@ -1250,18 +1298,12 @@ Two orderings emerge, and they are not the same. On accuracy, the DL-ROM leads (
 \label{sec:accuracy_cost}
 
 \paragraph{Where temporal compression reaches.}
-Equation~\eqref{eq:surr_cost} predicts that the Laplace surrogates are $6.8\times$ lighter than the DL-ROM, and Table~\ref{tab:synthesis} confirms it exactly. It does \emph{not} predict a $6.8\times$ speed-up, and \pend{none is observed: LLAE is in fact marginally \emph{slower} than the DL-ROM it replaces. Figure~\ref{fig:dlrom_cost_relative} makes the discrepancy explicit by normalising every axis to the full DL-ROM.}
+Equation~\eqref{eq:surr_cost} predicts that the Laplace surrogates are $6.8\times$ lighter than the DL-ROM, and Table~\ref{tab:synthesis} confirms it exactly. It does \emph{not} predict a $6.8\times$ speed-up, and none is observed: LLAE runs $1.35\times$ faster than the DL-ROM it replaces, and performs exactly as much arithmetic: normalised to the full DL-ROM, its parameter count falls to $0.15$ while its FLOPs stay at $1.00$.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{dlrom_cost_relative.png}
-    \caption{\pend{Inference cost of the Laplace pipelines relative to the DL-ROM at $N_t = 150$ (dashed line at $1$), same $150$-step output, logarithmic scale. Bars below $1$ are cheaper than the baseline. The parameter axis reflects the surrogate alone; the four others reflect the complete forward pass, which is decoder-dominated.}}
-    \label{fig:dlrom_cost_relative}
-\end{figure}
 
-The explanation is that the surrogate is not what the pipeline spends its time on --- the decoder is, as already observed when comparing the direct, SVD and Tucker variants (Section~\ref{sec:compression_verdict}). Both LLAE and the DL-ROM invoke the decoder once per output time step: $150$ decoder passes each, on the same convolutional backbone. Compressing the time axis \emph{in latent space} shrinks the quantity the MLP must regress, from $150$ latent frames to $16$ complex ones, but the inverse transform expands it back to $150$ frames before decoding, so the dominant term of the forward pass is untouched. \pend{The measurements bear this out with precision: LLAE and DL-ROM require $48.2$ and $48.3$\,GFLOPs respectively, an agreement to $0.2$\% that identifies the shared decoder as essentially the entire computation. The residual differences on the remaining axes follow from the surrogate: LLAE holds a $1.5\times$ advantage in peak memory ($621$ against $927$\,MB, the $20$M parameters it does not allocate) and concedes $15$--$22$\% in latency, the inversion being a dense $N_t \times N_t$ solve per latent channel that the DL-ROM does not perform. Energy tracks latency, with a run-to-run scatter ($9.3$ and $11.8$\,J for two architecturally identical LLAE checkpoints) that precludes reading anything finer than the ordering from it.}
+The explanation is that the surrogate is not what the pipeline spends its time on --- the decoder is, as already observed when comparing the direct, SVD and Tucker variants (Section~\ref{sec:compression_verdict}). Both LLAE and the DL-ROM invoke the decoder once per output time step: $150$ decoder passes each, on the same convolutional backbone. Compressing the time axis \emph{in latent space} shrinks the quantity the MLP must regress, from $150$ latent frames to $16$ complex ones, but the inverse transform expands it back to $150$ frames before decoding, so the dominant term of the forward pass is untouched. The measurements bear this out with precision: LLAE and DL-ROM require $48.2$ and $48.3$\,GFLOPs respectively, an agreement to $0.2$\% that identifies the shared decoder as essentially the entire computation. The residual differences on the remaining axes follow from the surrogate, and they favour LLAE: $1.5\times$ less peak memory ($622$ against $927$\,MB, the $20$M parameters it does not allocate) and $1.35\times$ less wall-clock time ($23.3$ against $31.4$\,ms), the DL-ROM evaluating $150$ per-time-step heads where LLAE evaluates $16$ per-frequency ones. That the two differ in latency while agreeing in arithmetic is the clearest illustration of why we report both: at equal FLOPs, the model whose predictor is split into ten times fewer kernels is the faster one, and no operation count can express that. Energy tracks latency closely, at $3.01$ and $3.01$\,J, and adds nothing the latency does not already say --- the board draws near-constant power over these millisecond kernels, so energy is latency in other units.
 
-SLAE is the configuration in which temporal compression does reach the decoder. Applying the transform in the physical domain leaves $K = 16$ complex frequency frames to decode instead of $150$ temporal ones, so the whole forward pass, and not merely the surrogate, is $O(K)$: \pend{$30.3$\,GFLOPs, $2.1\times$ lower latency, $3.9\times$ lower peak memory and $1.8\times$ lower energy than the DL-ROM at identical $150$-step output.} The three points of accuracy this costs are the counterpart --- the decoder never sees a physical time frame, and the trajectory is reconstructed by inverting a $16$-point spectrum --- and the offline contour of Section~\ref{sec:contour_results} recovers part of it, down to $5.04$\% at $K = 32$ while retaining a \pend{$1.6\times$} speed advantage.
+SLAE is the configuration in which temporal compression does reach the decoder. Applying the transform in the physical domain leaves $K = 16$ complex frequency frames to decode instead of $150$ temporal ones, so the whole forward pass, and not merely the surrogate, is $O(K)$: $30.3$\,GFLOPs against $48.3$, a $1.6\times$ reduction in arithmetic that this time \emph{does} convert into wall-clock time --- $2.0\times$ lower latency ($15.7$ against $31.4$\,ms), $3.9\times$ lower peak memory ($235$ against $927$\,MB) and $1.7\times$ lower energy than the DL-ROM at identical $150$-step output. The three points of accuracy this costs are the counterpart --- the decoder never sees a physical time frame, and the trajectory is reconstructed by inverting a $16$-point spectrum --- and the offline contour of Section~\ref{sec:contour_results} recovers part of it, down to $5.04$\% at $K = 32$ while retaining a $1.6\times$ speed advantage.
 
 The general principle is worth stating separately from the numbers, since it governs where temporal compression pays. A Laplace-domain pipeline is cheap on the axes that the compressed representation actually reaches. Compression in latent space (LLAE) reaches the surrogate only: it delivers the parameter and memory savings and leaves the arithmetic unchanged. Compression in the physical domain (SLAE) reaches the decoder as well, and converts into latency, FLOPs and energy. Reporting parameter counts alone --- the natural reading of equation~\eqref{eq:surr_cost} --- would have credited LLAE with a $6.8\times$ gain that no user would ever measure, an instance of the efficiency-misnomer effect documented by Dehghani et al.~\cite{dehghani2022efficiency}; this is why Table~\ref{tab:synthesis} and Figure~\ref{fig:dlrom_cost_axes} report several axes jointly.
 
@@ -1279,14 +1321,14 @@ All the comparisons above are stated at a fixed output resolution of $150$ steps
         \textbf{Model} & $\kappa$ & \textbf{Output steps}
             & $N_{\mathrm{surr}}$ & \textbf{Lat.\ (ms)} & \textbf{FLOPs (G)} & \textbf{Median (\%)} \\
         \midrule
-        DL-ROM & 1  & 150 & 23.50\,M & \pend{60.3} & \pend{48.3} & 3.80 \\
-        DL-ROM & 2  &  75 & 12.15\,M & \pend{51.8} & \pend{24.1} & 3.97 \\
-        DL-ROM & 3  &  50 &  8.36\,M & \pend{23.5} & \pend{16.1} & 3.84 \\
-        DL-ROM & 5  &  30 &  5.33\,M & \pend{14.8} &  \pend{9.7} & 3.86 \\
-        DL-ROM & 10 &  15 &  3.06\,M &  \pend{6.7} &  \pend{4.8} & 3.73 \\
+        DL-ROM & 1  & 150 & 23.50\,M & 32.9 & 48.3 & 3.80 \\
+        DL-ROM & 2  &  75 & 12.15\,M & 16.6 & 24.1 & 3.97 \\
+        DL-ROM & 3  &  50 &  8.36\,M & 11.3 & 16.1 & 3.84 \\
+        DL-ROM & 5  &  30 &  5.33\,M &  7.0 &  9.7 & 3.86 \\
+        DL-ROM & 10 &  15 &  3.06\,M &  3.9 &  4.8 & 3.73 \\
         \midrule
-        LLAE ($K=16$) & --- & \emph{any} & 3.48\,M & Fig.~\ref{fig:dlrom_cost_vs_nt} & \pend{4.8--48.2} & 4.18 \\
-        SLAE ($K=16$) & --- & \emph{any} & 3.22\,M & Fig.~\ref{fig:dlrom_cost_vs_nt} & \pend{30.2--30.3} & 7.59 \\
+        LLAE ($K=16$) & --- & \emph{any} & 3.48\,M & Fig.~\ref{fig:dlrom_cost_vs_nt} & 4.8--48.2 & 4.18 \\
+        SLAE ($K=16$) & --- & \emph{any} & 3.22\,M & Fig.~\ref{fig:dlrom_cost_vs_nt} & 30.2--30.3 & 7.59 \\
         \bottomrule
     \end{tabular}
     \caption{Temporal-resolution sweep of the DL-ROM against the two Laplace pipelines. Each DL-ROM row is a separately trained model; the two Laplace rows are a \emph{single} checkpoint each, queried at output resolutions $N_t \in \{15, 30, 50, 75, 150\}$, the FLOPs range spanning that interval and the corresponding latency profile being given in Figure~\ref{fig:dlrom_cost_vs_nt}. Errors are measured on each model's own output grid --- the DL-ROM at stride $\kappa$ against the ground truth subsampled at the same stride --- with no interpolation, so they are comparable in accuracy per delivered step but not in the number of steps delivered. The two Laplace medians are those measured at the $150$-step output; the \emph{cost} of querying a single Laplace checkpoint at coarser grids is measured (Figure~\ref{fig:dlrom_cost_vs_nt}), its \emph{accuracy} at those grids is not, and we return to this in Section~\ref{sec:discussion}.}
@@ -1297,20 +1339,62 @@ The sweep is informative in two ways. First, the DL-ROM's per-step accuracy is f
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{dlrom_cost_vs_nt.png}
-    \caption{\pend{Inference cost against requested output resolution $N_t$ at fixed horizon $T$ (batch size 1, NVIDIA RTX A5000). Solid lines: a \emph{single} Laplace checkpoint per curve, queried at each $N_t$. Dashed line with open circles: the DL-ROM, one separately trained model per point, each evaluable only at its own $N_t$. SLAE is flat on parameters, FLOPs, latency and memory; LLAE tracks the DL-ROM on FLOPs (both decode $N_t$ frames) at a constant surrogate size.}}
+    \includegraphics[width=\textwidth]{dlrom_cost_vs_nt}
+    \caption{Inference cost against requested output resolution $N_t$ at fixed horizon $T$ (batch size 1). Solid lines: a \emph{single} Laplace checkpoint per curve, queried at each $N_t$. Dashed line with open circles: the DL-ROM, one separately trained model per point, each evaluable only at its own $N_t$. SLAE is flat on parameters, FLOPs, latency and memory; LLAE tracks the DL-ROM on FLOPs (both decode $N_t$ frames) at a constant surrogate size.}
     \label{fig:dlrom_cost_vs_nt}
 \end{figure}
 
 \paragraph{One model, any $\Delta t$.}
-That asymmetry is structural rather than incidental, and it is the second consequence of compressing time spectrally. The Laplace coefficients $\hat{z}(s_k)$ predicted by the surrogate carry no reference to any time grid; the trajectory is materialised by the Tikhonov solve~\eqref{eq:tikhonov}--\eqref{eq:normal}, whose matrix $\bm{F}_{k,n} = \Delta t\, w_n\, e^{-s_k t_n}$ is assembled from whatever nodes $t_n$ are requested. A single trained model therefore answers at any output resolution --- any $\Delta t$ at fixed horizon $T$ --- for the cost of reassembling a small $K \times N_t$ matrix, whereas the per-time-step heads of the DL-ROM surrogate (equation~\eqref{eq:surr_cost}) are tied to the grid they were trained on.\footnote{A DL-ROM whose surrogate takes $t$ as an input coordinate rather than through indexed heads, as in~\cite{fresca2021}, is queryable off-grid; its \emph{cost} nonetheless remains proportional to the number of requested steps, one network evaluation per step, which is the property at issue here.} Figure~\ref{fig:dlrom_cost_vs_nt} traces the resulting cost profiles. It should be read as a statement about cost alone: we verify that one checkpoint \emph{answers} at every resolution and at what price, not that it answers equally well at each. Since the inversion~\eqref{eq:tikhonov}--\eqref{eq:normal} solves for the requested nodes from the same $K$ coefficients, the reconstruction error is not expected to depend strongly on the output grid --- a coarser grid asks strictly less of the same spectrum --- but we did not measure it, and the claim is one of availability, not of resolution-independent accuracy. LLAE keeps a constant surrogate ($3.48$M parameters at every $N_t$) but decodes $N_t$ frames, so its arithmetic follows the DL-ROM curve exactly, \pend{$4.8$ to $48.2$\,GFLOPs}; SLAE decodes $K = 16$ frames whatever is asked of it and is flat on every axis, \pend{$30.2$--$30.3$\,GFLOPs} from $N_t = 15$ to $N_t = 150$. \pend{Below $N_t \approx 100$ the DL-ROM and LLAE are cheaper in FLOPs than SLAE, above it SLAE wins and its margin grows without bound:} refining the output grid is free for SLAE, and the crossover is a property of the decoder, not of the transform.
+That asymmetry is structural rather than incidental, and it is the second consequence of compressing time spectrally. The Laplace coefficients $\hat{z}(s_k)$ predicted by the surrogate carry no reference to any time grid; the trajectory is materialised by the Tikhonov solve~\eqref{eq:tikhonov}--\eqref{eq:normal}, whose matrix $\bm{F}_{k,n} = \Delta t\, w_n\, e^{-s_k t_n}$ is assembled from whatever nodes $t_n$ are requested. A single trained model therefore answers at any output resolution --- any $\Delta t$ at fixed horizon $T$ --- for the cost of reassembling a small $K \times N_t$ matrix, whereas the per-time-step heads of the DL-ROM surrogate (equation~\eqref{eq:surr_cost}) are tied to the grid they were trained on.\footnote{A DL-ROM whose surrogate takes $t$ as an input coordinate rather than through indexed heads, as in~\cite{fresca2021}, is queryable off-grid; its \emph{cost} nonetheless remains proportional to the number of requested steps, one network evaluation per step, which is the property at issue here.} Figure~\ref{fig:dlrom_cost_vs_nt} traces the resulting cost profiles. It reports cost; accuracy across the same sweep is measured below, and it does not follow the intuition that a coarser grid asks strictly less of the same spectrum. LLAE keeps a constant surrogate ($3.48$M parameters at every $N_t$) but decodes $N_t$ frames, so its arithmetic follows the DL-ROM curve exactly, $4.8$ to $48.2$\,GFLOPs; SLAE decodes $K = 16$ frames whatever is asked of it and is flat on every axis, $30.2$--$30.3$\,GFLOPs from $N_t = 15$ to $N_t = 150$. Below $N_t \approx 100$ the DL-ROM and LLAE are cheaper in FLOPs than SLAE, above it SLAE wins and its margin grows without bound: refining the output grid is free for SLAE, and the crossover is a property of the decoder, not of the transform.
 
 This is where temporal Laplace compression is decisive rather than merely economical. The five DL-ROM rows of Table~\ref{tab:dlrom_sweep} are five trainings, five checkpoints and five fixed answers to a question --- at what temporal resolution is the trajectory needed? --- that is often settled after the model is deployed, and differently for each downstream use. The two Laplace rows are one training each, answering the entire range at inference time. For a many-query setting in which a coarse scan precedes a refined analysis of a few selected parameter values, that flexibility, and not the parameter count, is the operative advantage.
+
+\paragraph{Accuracy across output resolutions.}
+The preceding argument reports cost at a fixed $150$-step output. We now sweep the requested resolution $N_t \in \{15, 30, 50, 75, 150\}$ at fixed horizon $T$, querying the same $K = 16$ checkpoints and comparing against the DL-ROM, which requires one trained model per resolution. The comparison sets a specialised model against one evaluated away from its training grid, which is the property at issue rather than a confound.
+
+A sampling floor bounds the exercise from below, and it is known before any measurement. The contour carries frequencies up to $\omega_{\max} = 2\pi(K-1)/(N_t^{\mathrm{train}}\Delta t)$, here $0.628$\,rad per step, a period of ten steps. Representing that component on the output grid requires at least two samples per period, hence $\Delta t \leq \pi/\omega_{\max}$ and
+\begin{equation}
+\label{eq:nyquist_floor}
+    N_t \;\geq\; \frac{N_t^{\mathrm{train}}\,\omega_{\max}}{\pi} \;=\; 2(K-1),
+\end{equation}
+that is $N_t \geq 30$ for a prescribed contour at $K = 16$; an optimised contour, which displaces the sampling points outward, raises its own floor accordingly. Below it the fastest encoded component is aliased and no inversion can recover it, whatever the model. This is a property of the representation rather than a limitation of the pipeline, and it is the structural price of encoding the transient spectrally: the resolution floor is set by the number of Laplace coefficients, so a model trained at $K = 8$ would serve down to $N_t = 14$. The measurements follow~\eqref{eq:nyquist_floor} closely --- every configuration collapses at $N_t = 15$, by one to two orders of magnitude --- and we report that regime only to locate the floor.
+
+Above the floor the flexibility holds, and it holds unevenly (Table~\ref{tab:acc_vs_nt}). SLAE under a prescribed contour is nearly resolution-independent, losing $1.24$\,pp between $N_t = 150$ and $N_t = 30$ for a fivefold reduction of the output grid, while LLAE loses $3.50$\,pp and its learnable-contour variant $5.21$\,pp. The ordering between families therefore narrows as the grid coarsens: LLAE leads by $3.53$\,pp at full resolution and by only $1.27$\,pp at the floor. Applying the transform in the physical domain, which Section~\ref{sec:accuracy_cost} showed to be what makes cost flat in $N_t$, also makes accuracy flat in $N_t$ --- the decoder always sees the same $K$ frequency frames, and only the inversion is asked to change grid.
+
+The optimised contours raise their own floor, and this is the mechanism behind the one apparent anomaly of Table~\ref{tab:acc_vs_nt}. Both procedures dilate the imaginary parts of the sampling points (Section~\ref{sec:contour_results}), so they encode faster components and, by~\eqref{eq:nyquist_floor}, require a finer output grid: $\omega_{\max}$ rises from $0.628$ under the prescribed contour to $0.838$ for the LLAE learnable contour and $0.971$ for the SLAE offline one, moving the floor from $N_t = 30$ to $40$ and $46$ respectively. The ordering of the floors predicts the ordering of the failures exactly. At $N_t = 30$ the two prescribed contours sit at their floor and hold ($7.56$ and $8.83$\%), the learnable contour is below its own and degrades ($9.84$\%), and the offline contour, furthest below, collapses ($93.2$\%). What Section~\ref{sec:contour_results} presents as accuracy bought at no inference cost is therefore bought at a cost in resolution range: the wider spectral window that lowers the error at $N_t = 150$ is exactly what makes the representation unserviceable on a coarse grid.
+
+Rescaling the Tikhonov terms to the new grid ($\alpha_t \sim 1/\Delta t$, $\lambda \sim \Delta t$, which preserves the underlying continuous functional) recovers part of the sub-floor gap --- $631$\% against $1034$\% at $N_t = 15$ for the offline contour, $93.2$ against $105.7$ at $N_t = 30$ --- and no more; for every configuration above its floor it is worth at most $0.4$\,pp. This is the expected signature of aliasing rather than of misweighted penalties: the rescaling restores the functional being minimised, not the information the output grid can no longer carry.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{llrrrrr}
+        \toprule
+        \textbf{Model} & \textbf{Contour} & $N_t = 150$ & $75$ & $50$ & $30$ & $15$ \\
+        \midrule
+        \multirow{2}{*}{SLAE} & prescribed & 7.59 & 7.66 & 7.75 & \textbf{8.83} & 61.4 \\
+                              & offline    & \textbf{7.46} & \textbf{7.52} & 9.44 & 93.2 & 632 \\
+        \midrule
+        \multirow{2}{*}{LLAE} & prescribed & \textbf{4.06} & \textbf{4.46} & \textbf{7.02} & \textbf{7.56} & 51.3 \\
+                              & learnable  & 4.63 & 5.38 & 7.71 & 9.84 & 84.8 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Median relative $L^2$ error (\%) against requested output resolution, at fixed horizon $T$, test set ($n = 1620$). A single $K = 16$ checkpoint per row is queried at every resolution, with the Tikhonov terms rescaled to the output grid. Ground truth is the dataset subsampled on the same grid; no interpolation is involved. $N_t = 15$ lies below the sampling floor~\eqref{eq:nyquist_floor} and is reported to locate it. Best per column in bold.}
+    \label{tab:acc_vs_nt}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{dlrom_accuracy_vs_nt}
+    \caption{Relative $L^2$ error against requested output resolution at fixed horizon $T$ (test set, $n = 1620$). Solid lines: a single Laplace checkpoint queried at each resolution. Dashed: the DL-ROM, one trained checkpoint per resolution. The dotted vertical lines mark the sampling floor~\eqref{eq:nyquist_floor} of each contour, computed from its own stored poles: $N_t = 30$ for the prescribed contours, $40$ for the LLAE learnable one and $46$ for the SLAE offline one, the optimised contours encoding faster components. Each configuration degrades on crossing its own floor. Left: Tikhonov terms rescaled to the output grid; right: left unchanged, which matters only below a floor.}
+    \label{fig:accuracy_vs_nt}
+\end{figure}
 
 \subsection{Is latent compression worth it?}
 \label{sec:compression_verdict}
 
-Sections~\ref{sec:direct_surr}--\ref{sec:tucker_surr} evaluated three surrogate strategies — direct, single-mode SVD, and joint-mode Tucker — that differ only in how the latent prediction target is compressed. Do the compressed variants gain anything? On inference cost, the answer is no, and the reason is structural: the three pipelines share the same decoder, and it is the decoder — reconstructing the $K$ Laplace frames (SLAE) or all $N_t$ time frames (LLAE) — that dominates inference. SVD and Tucker change only the width of the MLP output head and insert a small linear back-projection ($V^\top$, or the two Tucker factors) before decoding; neither touches the decoder workload. Latency is therefore effectively invariant to the compression strategy: within each family the three pipelines fall in the same band ($\text{SLAE} \sim 7$--$9$\,ms, $\text{LLAE} \sim 18$--$22$\,ms at batch size~1 on the RTX A5000), the SVD variant being marginally the slowest because of its per-frequency back-projection. Table~\ref{tab:compression_verdict} places accuracy, target dimension and latency side by side at the shared AE configuration.
+Sections~\ref{sec:direct_surr}--\ref{sec:tucker_surr} evaluated three surrogate strategies — direct, single-mode SVD, and joint-mode Tucker — that differ only in how the latent prediction target is compressed. Do the compressed variants gain anything? On inference cost, the answer is no, and the reason is structural: the three pipelines share the same decoder, and it is the decoder — reconstructing the $K$ Laplace frames (SLAE) or all $N_t$ time frames (LLAE) — that dominates inference. SVD and Tucker change only the width of the MLP output head and insert a small linear back-projection ($V^\top$, or the two Tucker factors) before decoding; neither touches the decoder workload. Latency is therefore effectively invariant to the compression strategy: within each family the three pipelines fall in the same band ($\text{SLAE} \sim 7$--$9$\,ms, $\text{LLAE} \sim 18$--$22$\,ms at batch size~1), the SVD variant being marginally the slowest because of its per-frequency back-projection. Table~\ref{tab:compression_verdict} places accuracy, target dimension and latency side by side at the shared AE configuration.
 
 \begin{table}[htbp]
     \centering
@@ -1331,24 +1415,24 @@ Sections~\ref{sec:direct_surr}--\ref{sec:tucker_surr} evaluated three surrogate 
           & Tucker ($r_s{=}8$, $r_z{=}32$)  &  256 & 7.92 & 7.4 \\
         \bottomrule
     \end{tabular}
-    \caption{Direct vs.\ SVD vs.\ Tucker at the shared autoencoder configuration ($d_z=64$, $K=16$, $\gamma=0.01$). \emph{Target (coeff.)}: number of latent coefficients the surrogate predicts per sample ($K d_z$, $K k_{\mathrm{svd}}$, $r_s r_z$ respectively; complex-valued for LLAE, real for SLAE). Median relative $L^2$ error on the test set ($n=1620$); latency at batch size~1 on the NVIDIA RTX A5000. Compression shrinks the target by up to $4\times$ but leaves accuracy and latency essentially unchanged.}
+    \caption{Direct vs.\ SVD vs.\ Tucker at the shared autoencoder configuration ($d_z=64$, $K=16$, $\gamma=0.01$). \emph{Target (coeff.)}: number of latent coefficients the surrogate predicts per sample ($K d_z$, $K k_{\mathrm{svd}}$, $r_s r_z$ respectively; complex-valued for LLAE, real for SLAE). Median relative $L^2$ error on the test set ($n=1620$); latency at batch size~1. Compression shrinks the target by up to $4\times$ but leaves accuracy and latency essentially unchanged.}
     \label{tab:compression_verdict}
 \end{table}
 
 The verdict is clear. Relative to the direct surrogate, neither SVD nor Tucker improves accuracy (each adds a fraction of a point) nor latency (the pipeline is decoder-bound). What they \emph{do} buy is a smaller, simpler prediction target — Tucker down to $256$ coefficients, a $4\times$ reduction over the direct $K d_z = 1024$. That compactness only pays off when the surrogate, not the decoder, is the binding constraint: a tight training-data budget, storage or transmission of the predicted coefficients, or downstream analysis of the compact Tucker core. For the present problem, where the decoder governs both cost and error, the \emph{direct} surrogate is the pragmatic choice; the value of SVD and Tucker is chiefly methodological, showing that most of the latent's predictive content survives aggressive rank reduction.
 
-\subsection{Making the contour an optimisation variable}
+\subsection{Making the regularized inversion an optimisation variable}
 \label{sec:contour_verdict}
 
-In every Laplace-domain reduced-order model we are aware of, the integration contour is fixed by convention --- leading Fourier modes of the time grid, a uniform abscissa chosen small, regularisation parameters set a priori --- and never revisited, for want of any statement of what a given contour costs. The bound~\eqref{eq:bv_bound} supplies that statement. Everything the contour does to the reconstructed trajectory is carried by two scalars, the regularisation bias $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}\|$ and the amplification factor $\|\bm{A}^{-1}\bm{F}^H\|$ --- a condition number for the inversion --- which multiply respectively one and the coefficient error $\epsilon$, and which depend on $(s_k, \alpha_t, \lambda)$ \emph{alone}. That last property is what turns a convention into an optimisation variable: a candidate contour can be scored without training anything, since neither scalar involves the network that will eventually produce the coefficients.
+In every Laplace-domain reduced-order model we are aware of, the inversion is fixed by convention in its entirety --- poles at the leading Fourier modes of the time grid, a uniform abscissa chosen small, regularisation weights set a priori --- and never revisited, for want of any statement of what a given choice costs. The bound~\eqref{eq:bv_bound} supplies that statement, and it supplies it for the whole triplet at once. Everything the inversion does to the reconstructed trajectory is carried by two scalars, the regularisation bias $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}\|$ and the amplification factor $\|\bm{A}^{-1}\bm{F}^H\|$ --- a condition number for the inversion --- which multiply respectively one and the coefficient error $\epsilon$, and which depend on $(s_k, \alpha_t, \lambda)$ \emph{alone}. That last property is what turns a convention into an optimisation variable: a candidate triplet can be scored without training anything, since neither scalar involves the network that will eventually produce the coefficients. It is worth noting that the poles enter these two scalars on exactly the same footing as $\alpha_t$ and $\lambda$ --- the bound draws no distinction between placing a sampling point and weighting a penalty --- which is the formal counterpart of the reading announced in Section~\ref{sec:contour_optim}: what is being designed is the inversion, not the contour.
 
-The procedure that follows inherits this cheapness in full. Comparing two contours reduces to comparing two affine functions of $\epsilon$, and selecting one reduces to minimising the proxy~\eqref{eq:proxy} built from the bound: $500$ gradient steps on a purely linear-algebraic functional evaluated over $100$ instances --- seconds of computation, no network in the loop --- where an empirical selection would require a complete two-phase training per candidate contour. It is equally free at deployment, altering no tensor dimension, so the optimised and prescribed rows of each family in Table~\ref{tab:synthesis} are indistinguishable on all four cost axes. Accuracy is thus obtained here without spending anything on either side of the pipeline, which is rare enough among the levers examined in this work to be worth stating plainly: latent compression (Section~\ref{sec:compression_verdict}) bought a smaller target and no accuracy; the contour buys accuracy and costs nothing.
+The procedure that follows inherits this cheapness in full. Comparing two triplets reduces to comparing two affine functions of $\epsilon$, and selecting one reduces to minimising the proxy~\eqref{eq:proxy} built from the bound: $500$ gradient steps on a purely linear-algebraic functional evaluated over $100$ instances --- seconds of computation, no network in the loop --- where an empirical selection would require a complete two-phase training per candidate. It is equally free at deployment, altering no tensor dimension, so the optimised and prescribed rows of each family in Table~\ref{tab:synthesis} are indistinguishable on all four cost axes. Accuracy is thus obtained here without spending anything on either side of the pipeline, which is rare enough among the levers examined in this work to be worth stating plainly: latent compression (Section~\ref{sec:compression_verdict}) bought a smaller target and no accuracy; the inversion, tuned as a whole, buys accuracy and costs nothing.
 
-And it delivers, in the manner the bound predicts rather than in spite of it. The offline contour improves the end-to-end error at every $K$, by up to $1.85$\,pp, \emph{while degrading} reconstruction by as much as $7.13$\,pp --- a sign pattern that would be paradoxical without~\eqref{eq:bv_bound} and is a direct consequence of it: the criterion is calibrated at the coefficient error the surrogate actually incurs, and at that magnitude it is worth buying conditioning with bias. The Gap column of Table~\ref{tab:contour_results}, negative throughout and reaching $-8.59$\,pp at $K = 16$, measures the reconstruction penalty being handed back once the surrogate is trained. The outcome is the best SLAE result of the study, $5.04$\% at $K = 32$ --- a $43$\% reduction on the best POD surrogate, within $0.9$\,pp of the most accurate configuration we trained while evaluating $1.6\times$ faster --- and $7.46$\% at $K = 16$ for a $2.9\times$ speed advantage. Contour optimisation displaces the SLAE accuracy--cost front strictly downward, and it is on that family, the one whose compression reaches the decoder and converts into latency and energy (Section~\ref{sec:accuracy_cost}), that the recovery is most useful.
+And it delivers, in the manner the bound predicts rather than in spite of it. The offline triplet improves the end-to-end error at every $K$, by up to $1.85$\,pp, \emph{while degrading} reconstruction by as much as $7.13$\,pp --- a sign pattern that would be paradoxical without~\eqref{eq:bv_bound} and is a direct consequence of it: the criterion is calibrated at the coefficient error the surrogate actually incurs, and at that magnitude it is worth buying conditioning with bias. The Gap column of Table~\ref{tab:contour_results}, negative throughout and reaching $-8.59$\,pp at $K = 16$, measures the reconstruction penalty being handed back once the surrogate is trained. The outcome is the best SLAE result of the study, $5.04$\% at $K = 32$ --- a $43$\% reduction on the best POD surrogate, within $0.9$\,pp of the most accurate configuration we trained while evaluating $1.6\times$ faster --- and $7.46$\% at $K = 16$ for a $2.9\times$ speed advantage. Optimising the inversion displaces the SLAE accuracy--cost front strictly downward, and it is on that family, the one whose compression reaches the decoder and converts into latency and energy (Section~\ref{sec:accuracy_cost}), that the recovery is most useful.
 
-The learnable contour, which moves the sampling points comparably (Figure~\ref{fig:contour_poles}) but is scored on reconstruction, is the control that isolates the criterion from the displacement. It attains the most accurate autoencoder of the entire study, $2.61$\%, and leaves the deployed error flat at $4.54$--$4.63$\%. Our reading is that the representation it selects is simply harder to learn: the widened spectral window populates the latent trajectories with faster-varying components, so the map $\vmu \mapsto \hat{z}(s_k)$ that the surrogate must regress becomes less regular, and the fidelity gained upstream is spent in full on the harder regression --- with, plausibly, some degree of specialisation to the reconstruction task itself, an overfitting of the objective rather than of the data, since held-out reconstruction does improve (Appendix~\ref{app:contour_ae}). Whichever share belongs to each, the lesson is that a contour must be judged on the deployed error and not on the error floor it permits, and this is exactly what the $\epsilon$ of the bound formalises.
+The learnable contour, which moves the sampling points comparably (Figure~\ref{fig:contour_poles}) but is scored on reconstruction, is the control that isolates the criterion from the displacement. It attains the most accurate Laplace autoencoder of the study, $2.61$\%, and leaves the deployed error flat at $4.54$--$4.63$\%. Our reading is that the representation it selects is simply harder to learn: the widened spectral window populates the latent trajectories with faster-varying components, so the map $\vmu \mapsto \hat{z}(s_k)$ that the surrogate must regress becomes less regular, and the fidelity gained upstream is spent in full on the harder regression --- with, plausibly, some degree of specialisation to the reconstruction task itself, an overfitting of the objective rather than of the data, since held-out reconstruction does improve (Appendix~\ref{app:contour_ae}). Whichever share belongs to each, the lesson is that an inversion must be judged on the deployed error and not on the error floor it permits, and this is exactly what the $\epsilon$ of the bound formalises.
 
-Two reservations temper the result. The proxy is calibrated at an assumed magnitude of surrogate error, known only after the fact; we used one setting throughout and did not characterise the sensitivity of the selected contour to it. And the learnability reading of the previous paragraph is an interpretation, not a measurement: establishing it would require characterising the regularity of $\vmu \mapsto \hat{z}(s_k)$ under each contour independently of the surrogate trained on it. Neither reservation touches the central point --- that the contour is an optimisable object, that~\eqref{eq:bv_bound} says at what price, and that acting on it is the cheapest accuracy in this study.
+Three reservations temper the result. The proxy is calibrated at an assumed magnitude of surrogate error, known only after the fact; we used one setting throughout and did not characterise the sensitivity of the selected triplet to it. The learnability reading of the previous paragraph is an interpretation, not a measurement: establishing it would require characterising the regularity of $\vmu \mapsto \hat{z}(s_k)$ under each inversion independently of the surrogate trained on it. And, as stated in Section~\ref{sec:contour_optim}, the gain is credited to the triplet and not apportioned within it: our reference leaves $(\alpha_t, \lambda)$ at untuned values, so part of what we measure may be the fitting of the regularisation rather than the displacement of the poles. None of the three touches the central point --- that the regularized inversion is an optimisable object, that~\eqref{eq:bv_bound} says at what price, and that acting on it is the cheapest accuracy in this study.
 
 \subsection{Positioning with respect to related work}
 \label{sec:positioning}
@@ -1365,16 +1449,16 @@ What distinguishes our approach is not the spatial compressor but the treatment 
 \paragraph{What the ablations attribute to what.}
 The two references were chosen to remove one ingredient each, and read together they place the credit unambiguously. Removing the non-linearity costs a great deal: POD in the Laplace domain sits at $8.91\%$ against $3.80$--$4.63\%$ for every deep model, and no amount of additional POD modes closes the gap --- $k_{\mathrm{pod}} = 128$ improves the reconstruction floor to $7.04\%$ and \emph{degrades} the deployed error to $11.29\%$, the regression problem growing faster than the basis improves. Removing the Laplace transform, by contrast, costs nothing in accuracy and in fact gains a little: the DL-ROM is the most accurate emulator of the study. This is the honest reading of our own experiment, and it is the expected one --- a surrogate that predicts $150$ latent frames faces a strictly easier approximation problem than one constrained to $16$ complex coefficients, and any spectral truncation can only remove information the time-domain model retains.
 
-Temporal compression must therefore be justified on cost and on flexibility, not on accuracy, and this is where the study's substantive findings lie. The first is that \emph{where} the transform is applied decides which cost axes benefit, and that the parameter count --- the quantity equation~\eqref{eq:surr_cost} predicts and the one a paper is tempted to report --- is the axis least representative of what a user measures. LLAE is $6.8\times$ lighter than the DL-ROM in surrogate parameters and \pend{$1.5\times$ lighter in memory, yet marginally \emph{slower}}, because both decode $N_t$ frames through the same backbone: \pend{the two agree to $0.2\%$ in FLOPs}. SLAE, whose decoder sees only the $K$ frequency frames, is the configuration in which the compression reaches the arithmetic, and it converts into \pend{$2.1\times$} latency and \pend{$3.9\times$} memory at identical output. A Laplace pipeline is cheap on exactly the axes its compressed representation reaches, and no further.
+Temporal compression must therefore be justified on cost and on flexibility, not on accuracy, and this is where the study's substantive findings lie. The first is that \emph{where} the transform is applied decides which cost axes benefit, and that the parameter count --- the quantity equation~\eqref{eq:surr_cost} predicts and the one a paper is tempted to report --- is the axis least representative of what a user measures. LLAE is $6.8\times$ lighter than the DL-ROM in surrogate parameters and $1.5\times$ lighter in memory, yet performs exactly as much arithmetic --- the two agree to $0.2\%$ in FLOPs --- because both decode $N_t$ frames through the same backbone. Its $1.35\times$ latency advantage comes not from the compression but from evaluating $16$ prediction heads instead of $150$. SLAE, whose decoder sees only the $K$ frequency frames, is the configuration in which the compression reaches the arithmetic, and it converts into $2.0\times$ latency and $3.9\times$ memory at identical output. A Laplace pipeline is cheap on exactly the axes its compressed representation reaches, and no further.
 
-The second is that the integration contour, fixed by convention in every Laplace-domain ROM we are aware of, is a design variable of first order that can be optimised for free --- and that it must be scored on the deployed error rather than on the reconstruction floor. The two strategies we compare displace the sampling points comparably but are calibrated at different magnitudes of coefficient error, and only the one calibrated at the surrogate's magnitude improves the emulator: the offline contour gains up to $1.85$\,pp end-to-end \emph{while degrading} reconstruction by up to $7.13$\,pp, whereas the learnable contour produces the best autoencoder of the study ($2.61\%$) and leaves the deployed error flat. Among all the levers examined here this is the only one that buys accuracy at no cost on either side of the pipeline.
+The second is that the regularized inversion --- the poles \emph{and} the regularisation weights $(\alpha_t, \lambda)$ that go with them, fixed by convention in every Laplace-domain ROM we are aware of --- is a design object of first order that can be optimised for free, and one that must be scored on the deployed error rather than on the reconstruction floor. The two strategies we compare displace the sampling points comparably but are calibrated at different magnitudes of coefficient error, and only the one calibrated at the surrogate's magnitude improves the emulator: the offline contour gains up to $1.85$\,pp end-to-end \emph{while degrading} reconstruction by up to $7.13$\,pp, whereas the learnable contour produces the best Laplace autoencoder of the study ($2.61\%$) and leaves the deployed error flat. Among all the levers examined here this is the only one that buys accuracy at no cost on either side of the pipeline.
 
 The third is a negative result worth stating as such: compressing the latent target before the surrogate --- by SVD along one mode or by Tucker along two --- buys neither accuracy nor latency. It shrinks the prediction target by up to $4\times$ for a fraction of a point, which is useful only when the surrogate rather than the decoder is the binding constraint. Its value here is diagnostic: that a rank-$4$ basis over the frequency mode is as good as a rank-$8$ one says that the $K = 16$ Laplace coefficients are already close to their useful floor, evidence arriving from a tensor factorisation fitted blind to the physics and independent of the argument that motivated the transform.
 
 \paragraph{Limitations.}
 Several qualifications bound the above, and we state them in decreasing order of consequence.
 
-\emph{Timing measurements.} \pend{[Draft note --- all timing and cost figures shown in blue in this manuscript were collected on an RTX 3090 or on an unidentified device and are pending re-measurement on the A5000; the surrounding text is written against the values they will replace.]} The latency figures reported across Sections~\ref{sec:ae_perf}, \ref{sec:direct_surr} and~\ref{sec:contour_results} were collected on three different machines under different loads, and span a factor of several for architecturally identical checkpoints. Only Table~\ref{tab:synthesis} and Figures~\ref{fig:dlrom_cost_axes}--\ref{fig:dlrom_cost_vs_nt}, measured in a single run on one device, support cross-model comparison; the per-section absolute values should be read as internal to their section. The ratio between families is stable across all of them ($2.1$--$2.9\times$ in favour of SLAE), which is the quantity the conclusions rest on, but a uniform re-measurement on a single device is required before any absolute latency in this paper is quoted.
+\emph{Cost measurements.} Every cost figure in this paper was collected on the same idle GPU (Appendix~\ref{app:architecture}) with a single instrumentation path --- CUDA Events for latency, a counter over the executed graph for FLOPs, and the allocator's high-water mark for memory --- so the numbers are mutually comparable across sections. Two caveats nonetheless bound what should be read into them. First, wall-clock latency measures an implementation as much as an architecture, and our two reconstruction pipelines are not written with equal care: the SLAE path evaluates its Laplace transform pair in double precision on the host, which the LLAE path avoids by performing its transform inside the model, and this alone accounts for the sign disagreement between the FLOP and latency columns of Table~\ref{tab:bench}. Single precision would remove the gap but makes the Tikhonov inversion diverge at the ridge values of the prescribed contours, so the comparison is left as measured rather than repaired by a change that would compromise the numerics. The surrogate stage, which applies no forward transform, is free of this asymmetry, and it is the stage the conclusions rest on. Second, energy is reported for completeness but carries little independent information at this scale: the board draws near-constant power over kernels of a few milliseconds, so the energy column is proportional to latency to within a few percent and should not be read as a separate axis.
 
 \emph{Structure of the design.} As set out in Section~\ref{sec:problem_setting}, the parameter design is full factorial --- $225$ points in $(k,C)$ crossed with $36$ injection angles --- and partitioned uniformly over the product grid. This is a statement about the shape of the design, not about the validity of the instances, each of which is an exact solution at its own parameter value. Its consequence is that the test error measures interpolation at held-out points of a dense design rather than extrapolation to a $(k,C)$ pair outside it, and that the aggregate is weighted towards the $\phi$ direction, which the factorial resolves $36$ ways against $225$ for the $(k,C)$ plane. A per-direction error breakdown, or a second partition holding out whole $(k,C)$ pairs, would separate the two; both are cheap and neither was done here.
 
@@ -1386,7 +1470,7 @@ Several qualifications bound the above, and we state them in decreasing order of
 
 \emph{Unmeasured resolution behaviour.} The cost of querying a single Laplace checkpoint across output resolutions is measured; its accuracy across them is not (Section~\ref{sec:accuracy_cost}). The flexibility claim is therefore one of availability at known cost.
 
-\emph{Scope.} All results concern one two-dimensional convection--diffusion--reaction problem with $p = 3$ parameters and a single output field, on a structured grid, over a fixed horizon. The proxy~\eqref{eq:proxy} is moreover calibrated at an assumed magnitude of surrogate error through $\lambda_{\mathrm{AE}}$, held at one value throughout; the sensitivity of the selected contour to that setting is not characterised.
+\emph{Scope.} All results concern one two-dimensional convection--diffusion--reaction problem with $p = 3$ parameters and a single output field, on a structured grid, over a fixed horizon. The proxy~\eqref{eq:proxy} is moreover calibrated at an assumed magnitude of surrogate error through $\lambda_{\mathrm{AE}}$, held at one value throughout; the sensitivity of the selected triplet to that setting is not characterised, any more than is the share of the gain attributable to the poles rather than to $(\alpha_t, \lambda)$, which our untuned reference does not separate.
 
 \paragraph{Perspectives.}
 The most direct continuations follow from the limitations. Re-measuring all timings uniformly and repartitioning at the level of the underlying simulations are prerequisites to any quantitative claim beyond the orderings established here. Beyond that, three directions seem to us the most promising.
@@ -1401,15 +1485,17 @@ The third is compositional. The Laplace stage acts on time and is orthogonal to 
 
 We have introduced the Laplace transform as a temporal compression stage within the DL-ROM framework, predicting $K \ll N_t$ complex spectral coefficients from a parameter vector and recovering the full trajectory through a differentiable Tikhonov inversion, and we have studied two instantiations differing only in where the transform is applied: in the physical domain (SLAE) or in the learned latent space (LLAE). Against a linear POD surrogate in the same Laplace domain and a Laplace-free DL-ROM ablation, on a parametric transient combustion problem with $N_t = 150$, LLAE reaches $4.13\%$ median relative $L^2$ error and SLAE $5.04\%$ with an optimised contour, against $8.91\%$ for POD and $3.80\%$ for the DL-ROM.
 
-The conclusion we draw from this is deliberately not that temporal compression improves accuracy --- it does not, and our own DL-ROM ablation is the evidence. It is that it changes what a fixed accuracy costs, and that the benefit is confined to the axes the compressed representation actually reaches: applied in latent space it shrinks the surrogate alone, leaving the arithmetic of the forward pass untouched; applied in the physical domain it reaches the decoder and converts into \pend{$2.1\times$} latency and \pend{$3.9\times$} memory at identical output. It also changes what a trained model can be asked for: because the predicted coefficients refer to no time grid, one checkpoint answers at any output resolution, where the DL-ROM required one training per grid across our sweep.
+The conclusion we draw from this is deliberately not that temporal compression improves accuracy --- it does not, and our own DL-ROM ablation is the evidence. It is that it changes what a fixed accuracy costs, and that the benefit is confined to the axes the compressed representation actually reaches: applied in latent space it shrinks the surrogate alone, leaving the arithmetic of the forward pass untouched; applied in the physical domain it reaches the decoder and converts into $2.0\times$ latency and $3.9\times$ memory at identical output. It also changes what a trained model can be asked for: because the predicted coefficients refer to no time grid, one checkpoint answers at any output resolution, where the DL-ROM required one training per grid across our sweep.
 
-The second contribution is the treatment of the integration contour. The bias--amplification bound~\eqref{eq:bv_bound} shows that everything the contour does to the reconstructed trajectory passes through two scalars that depend on $(s_k, \alpha_t, \lambda)$ and on nothing else, which makes a candidate contour scorable without training any network. Acting on it improves the deployed error at every $K$, by up to $1.85$\,pp, for a few hundred gradient steps on a purely linear-algebraic functional and at no inference cost --- while, instructively, degrading the reconstruction floor by as much as $7.13$\,pp. That sign reversal is the methodological point we would most like to carry beyond this paper: a contour, and more generally a representation, must be judged at the magnitude of error the deployed model actually incurs, not at the floor it permits. The same criterion applied to reconstruction alone selects the best autoencoder of our study and improves nothing that is delivered.
+The second contribution is to treat the regularized inversion --- the poles and the regularisation weights jointly, not the contour alone --- as an object to be designed rather than fixed by convention. The bias--amplification bound~\eqref{eq:bv_bound} shows that everything it does to the reconstructed trajectory passes through two scalars that depend on the triplet $(s_k, \alpha_t, \lambda)$ and on nothing else, which makes a candidate triplet scorable without training any network. Acting on it improves the deployed error at every $K$, by up to $1.85$\,pp, for a few hundred gradient steps on a purely linear-algebraic functional and at no inference cost --- while, instructively, degrading the reconstruction floor by as much as $7.13$\,pp. That sign reversal is the methodological point we would most like to carry beyond this paper: an inversion, and more generally a representation, must be judged at the magnitude of error the deployed model actually incurs, not at the floor it permits. The same criterion applied to reconstruction alone selects the best autoencoder of our study and improves nothing that is delivered.
 
 \newpage
 \begin{appendices}
 \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
 
 \clearpage
+\appendix
+
 \section{Per-Checkpoint Error Distributions}
 \label{app:histograms}
 
@@ -1417,7 +1503,7 @@ The second contribution is the treatment of the integration contour. The bias--a
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_rec_histograms.png}
+    \includegraphics[width=\textwidth]{pod_rec_hist}
     \caption{Per-configuration error histograms for the POD reconstruction (test set, $n=1620$). The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
     \label{fig:pod_rec_histograms}
 \end{figure}
@@ -1426,7 +1512,7 @@ The second contribution is the treatment of the integration contour. The bias--a
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_surr_histograms.png}
+    \includegraphics[width=\textwidth]{pod_surr_hist}
     \caption{Per-configuration error histograms for the POD surrogate (test set, $n=1620$). Same layout as Figure~\ref{fig:pod_rec_histograms}; green bars indicate surrogate predictions.}
     \label{fig:pod_surr_histograms}
 \end{figure}
@@ -1435,7 +1521,7 @@ The second contribution is the treatment of the integration contour. The bias--a
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{ae_histograms_all.png}
+    \includegraphics[width=\textwidth]{ae_hist_grid}
     \caption{Per-checkpoint error histograms on the test set ($n=1620$). Each panel corresponds to one checkpoint; SLAE in blue, LLAE in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
     \label{fig:ae_histograms}
 \end{figure}
@@ -1445,9 +1531,18 @@ Figure~\ref{fig:surr_histograms} shows the per-sample error distribution for eac
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{surr_histograms.png}
+    \includegraphics[width=\textwidth]{surr_hist_grid}
     \caption{Per-checkpoint error histograms for all 14 direct surrogate models (test set, $n=1620$). SLAE checkpoints in blue, LLAE checkpoints in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
     \label{fig:surr_histograms}
+\end{figure}
+
+\paragraph{DL-ROM baseline.} Figure~\ref{fig:dlrom_hist} shows the corresponding distribution for the Laplace-free DL-ROM baseline of Section~\ref{sec:dlrom_results}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{dlrom_hist}
+    \caption{DL-ROM baseline at full temporal resolution ($N_t = 150$, $d_z = 64$): distribution of the relative $L^2$ error on the physical field $U(t)$ over the test set ($n = 1620$). Median $3.80$\%, mean $4.15$\%, p90 $6.12$\%.}
+    \label{fig:dlrom_hist}
 \end{figure}
 
 \paragraph{Tucker surrogate checkpoints.}
@@ -1455,7 +1550,7 @@ Figure~\ref{fig:tucker_histograms} shows the per-sample error distribution for e
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{tucker_histograms.png}
+    \includegraphics[width=\textwidth]{tucker_hist}
     \caption{Per-checkpoint error histograms for all 12 Tucker surrogate models (test set, $n=1620$). SLAE-Tucker in blue, LLAE-Tucker in red. The dashed black line is the median, dashed orange the mean, dotted red the 90th percentile.}
     \label{fig:tucker_histograms}
 \end{figure}
@@ -1468,29 +1563,38 @@ This appendix collects the complete hyperparameter sweeps behind Section~\ref{se
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_rec_ablation.png}
+    \includegraphics[width=\textwidth]{pod_rec_vs_surr}
+    \caption{POD reconstruction (blue) vs.\ end-to-end surrogate (green): median relative $L^2$ error for all configurations of Table~\ref{tab:pod_surr_results} (median $\pm$ IQR). Arrows indicate the surrogate overhead.}
+    \label{fig:pod_rec_vs_surr}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{pod_rec_ablation}
     \caption{POD reconstruction ablation (test set, median $\pm$ IQR, violin plots; black line = median, dashed orange = mean). From left to right: effect of the damping parameter $\gamma$ ($K=16$, $k_{\mathrm{pod}}=64$), effect of the number of Laplace frequencies $K$ ($k_{\mathrm{pod}}=64$, $\gamma=0.01$), and effect of the number of POD modes $k_{\mathrm{pod}}$ ($K=16$, $\gamma=0.01$).}
     \label{fig:pod_ablation}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_rec_per_freq.png}
+    \includegraphics[width=\textwidth]{pod_rec_per_freq}
     \caption{POD reconstruction — per-frequency Laplace-domain error (median $\pm$ IQR, test set). Left: effect of $\gamma$; centre: effect of $K$; right: effect of $k_{\mathrm{pod}}$. The left panel exposes the trade-off discussed in Section~\ref{sec:pod_results}: the Laplace-domain error is systematically \emph{lower} for $\gamma=0$ at every frequency index, yet the net physical-field error is nearly unchanged, because the Tikhonov inversion error moves in the opposite direction.}
     \label{fig:pod_per_freq}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_surr_ablation.png}
+    \includegraphics[width=\textwidth]{pod_surr_ablation}
     \caption{POD surrogate ablation (test set, median $\pm$ IQR). From left to right: effect of $\gamma$ ($K=16$, $k_{\mathrm{pod}}=64$), effect of $K$ ($k_{\mathrm{pod}}=64$, $\gamma=0.01$), and effect of $k_{\mathrm{pod}}$ ($K=16$, $\gamma=0.01$). Black line = median, dashed orange = mean.}
     \label{fig:svd_surr_ablation}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{svd_surr_bench.png}
-    \caption{POD surrogate inference benchmark (NVIDIA RTX A5000, 50 timed CUDA Event runs, 10 warm-up runs). Left: per-sample latency at batch size 1, sorted by latency. Right: throughput (samples/s) vs.\ $k_{\mathrm{pod}}$ at batch size 32.}
+    \includegraphics[width=0.49\textwidth]{pod_bench_flops}
+    \hfill
+    \includegraphics[width=0.49\textwidth]{pod_bench_latency}
+    \caption{POD surrogate inference benchmark (50 timed CUDA Event runs, 10 warm-up runs). Left: per-sample latency at batch size 1, sorted by latency. Right: throughput (samples/s) vs.\ $k_{\mathrm{pod}}$ at batch size 32.}
     \label{fig:pod_surr_bench}
 \end{figure}
 
@@ -1502,14 +1606,14 @@ Figures~\ref{fig:llae_surr_ablation} and~\ref{fig:slae_surr_ablation} show the e
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{llae_surr_ablation.png}
+    \includegraphics[width=\textwidth]{surr_violins_llae}
     \caption{LLAE surrogate ablation (test set, $n=1620$, violin plots; black line = median, dashed orange = mean). From left to right: effect of the number of Laplace frequencies $K$ ($d_z=64$, $\gamma=0.01$) and effect of the latent dimension $d_z$ ($K=16$, $\gamma=0.01$). The surrogate error varies by less than 0.5\,pp across all LLAE configurations.}
     \label{fig:llae_surr_ablation}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{slae_surr_ablation.png}
+    \includegraphics[width=\textwidth]{surr_violins_slae}
     \caption{SLAE surrogate ablation (test set, $n=1620$). Same layout as Figure~\ref{fig:llae_surr_ablation}. SLAE error is strongly sensitive to $K$: $K=8$ degrades to 11.6\% while $K=32$ achieves the best SLAE result (5.7\%). Note the larger $y$-axis range compared to LLAE.}
     \label{fig:slae_surr_ablation}
 \end{figure}
@@ -1526,7 +1630,7 @@ The offline contour degrades the reconstruction instead, by $+0.66$ and $+0.19$\
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{optae_cell17_04.png}
+    \includegraphics[width=\textwidth]{optae_violins_all}
     \caption{Standalone reconstruction error under the optimised contours: distribution of the relative $L^2$ error on the test set ($n=1620$), one panel per family, configurations ordered by median. Black line: median; dashed orange line: mean. Left: LLAE, learnable contour, whose three configurations are tightly grouped between 2.61 and 2.89\%. Right: SLAE, offline contour, on a $y$-axis an order of magnitude wider and with pronounced upper tails. The ordering is the reverse of that obtained at the surrogate stage (Figure~\ref{fig:contour_violins}), reflecting the negative Gap of Table~\ref{tab:contour_results}.}
     \label{fig:contour_ae_bar}
 \end{figure}
@@ -1573,81 +1677,110 @@ Our neural surrogate model is designed to emulate the transient dynamics of a re
 \section{Architectural Details and Setup}
 \label{app:architecture}
 
-All models were trained using the AdamW optimizer (weight decay $10^{-4}$) with a learning rate of $5 \times 10^{-4}$ for the autoencoders, $3 \times 10^{-4}$ for the surrogate trunk, and $5 \times 10^{-5}$ for the fine-tuned decoder, over 300 epochs. The autoencoders used a batch size of 256 (SLAE) or 16 (LLAE). Training was performed on a workstation equipped with an Intel(R) Xeon(R) w3-2435 CPU (62GB RAM) and an NVIDIA GeForce RTX 3090 GPU (24GB VRAM).
+\paragraph{Hardware and software.}
+Every model of this study was trained, and every cost figure measured, on identically configured workstations of the same pool: an Intel Xeon W-1270P CPU ($8$ cores, $16$ threads) with $62$\,GB of RAM and a single NVIDIA RTX A5000 GPU ($24$\,GB). The software stack is Python $3.13$, PyTorch $2.12$ (CUDA $13.0$) and PyTorch Lightning $2.6$. All inference-cost figures reported in this paper --- latency, FLOPs, peak GPU memory and energy --- were collected on one such idle machine, at batch size $1$ unless stated otherwise, with $50$ timed CUDA Event runs after $10$ warm-up runs; the device is not named again in the individual captions.
 
-The data partition is the one described in Section~\ref{sec:problem_setting}: $5{,}184$ training, $1{,}296$ validation and $1{,}620$ test instances, drawn by a fixed permutation of seed $42$ and identical across every model, phase and hyperparameter configuration of this study. Both phases monitor the validation set --- the reconstruction loss for the autoencoders, the relative $L^2$ error for the surrogates --- for early stopping (patience $40$) and for selecting the checkpoint that is subsequently evaluated. No test instance enters any training or selection decision at any point.
+\paragraph{Optimisation protocol.}
+Both phases share the same protocol, and it is the one written in the configuration files distributed with the code; the only departures are the sweep overrides named in the tables below. Optimiser AdamW with weight decay $10^{-4}$; learning-rate schedule \texttt{ReduceLROnPlateau} (factor $0.5$, patience $15$, floor $10^{-6}$) driven by the monitored validation quantity; mixed $16$-bit precision; gradient-norm clipping at $1.0$; at most $300$ epochs with early stopping at patience $40$. The monitored quantity is the validation loss for the autoencoders and the validation relative $L^2$ error for the surrogates, and it also selects the checkpoint that is subsequently evaluated. The global seed is $42$ for every run.
 
-Table~\ref{tab:ae_hparams} summarises the hyperparameters of both autoencoder architectures.
+\paragraph{Data.}
+The partition is the one described in Section~\ref{sec:problem_setting}: $5{,}184$ training, $1{,}296$ validation and $1{,}620$ test instances, drawn by a fixed permutation of seed $42$ and identical across every model, phase and hyperparameter configuration of this study. No test instance enters any training or selection decision at any point. Fields are standardised pixel-wise using training-set statistics; for SLAE the Laplace frames are standardised per frequency and per pixel, and the compressed targets of the SVD and Tucker variants are standardised as well, so all losses below are evaluated in normalised space. The forward quadrature uses the trapezoidal rule on the $N_t = 150$ nodes of the $\Delta t = 1$\,s grid.
+
+Table~\ref{tab:ae_hparams} summarises the autoencoders (Phase 1) and Table~\ref{tab:surr_hparams} the surrogates (Phase 2).
 
 \begin{table}[H]
     \centering
-    \renewcommand{\arraystretch}{1.3}
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.2}
     \begin{tabular}{llcc}
         \toprule
         \textbf{Group} & \textbf{Hyperparameter} & \textbf{SLAE} & \textbf{LLAE} \\
         \midrule
-        \multirow{4}{*}{Architecture (baseline$^\dagger$)}
-          & Latent dim $d_z$           & 64   & 64   \\
-          & Frequencies $K$            & 16   & 16   \\
-          & Sinusoidal levels $L$      & 8    & 8    \\
-          & Contour $\gamma$           & 0.01 & 0.01 \\
+        \multirow{5}{*}{Architecture (baseline$^\dagger$)}
+          & Latent dim $d_z$                & 64 & 64 \\
+          & Frequencies $K$                 & 16 & 16 \\
+          & Contour $\gamma$                & 0.01 & 0.01 \\
+          & Conditioning coord.\           & $k/(K{-}1)$ & $t/(N_t{-}1)$ \\
+          & Sinusoidal levels $L$           & 8 & 8 \\
+        \midrule
+        \multirow{5}{*}{Backbone}
+          & Grid $N \times N$               & $128^2$ & $128^2$ \\
+          & Input channels                  & $2$ (Re, Im) & $1$ \\
+          & Encoder channels                & \multicolumn{2}{c}{$16 \to 32 \to 64$, then FC $\to 2d_z \to d_z$} \\
+          & Decoder channels                & $128\to128\to64\to32$ & $64\to64\to32\to16$ \\
+          & Decoder norm                    & BatchNorm & GroupNorm$(8)$ \\
+          & Decoder output heads            & $2$ (Re, Im) & $1$ \\
         \midrule
         \multirow{4}{*}{Regularization}
-          & Ridge $\beta$              & $10^{-2}$ & $10^{-2}$ \\
+          & Ridge $\beta$ on $z$            & $10^{-2}$ & $10^{-2}$ \\
           & Latent roundtrip $\beta_\text{latent}$ & --- & $0.1$ \\
-          & Tikhonov $\alpha_t$        & $7\times10^{-3}$ (eval) & $7\times10^{-3}$ \\
-          & Tikhonov $\lambda$         & $3\times10^{-5}$ (eval) & $3\times10^{-5}$ \\
+          & Tikhonov $\alpha_t$             & $7\times10^{-3}$ (eval) & $7\times10^{-3}$ \\
+          & Tikhonov $\lambda$              & $3\times10^{-5}$ (eval) & $3\times10^{-5}$ \\
         \midrule
-        \multirow{4}{*}{Training}
-          & Epochs                     & 300  & 300  \\
-          & Batch size                 & 256   & 16   \\
-          & Learning rate              & $5\times10^{-4}$ & $5\times10^{-4}$ \\
-          & Early stopping patience    & 40   & 40   \\
+        \multirow{6}{*}{Training}
+          & Epochs (max)                    & 300 & 300 \\
+          & Batch size                      & 16$^\ddagger$ & 16 \\
+          & Learning rate                   & $5\times10^{-4}$ & $5\times10^{-4}$ \\
+          & Weight decay                    & $10^{-4}$ & $10^{-4}$ \\
+          & Early stopping patience         & 40 & 40 \\
+          & Monitored quantity              & \multicolumn{2}{c}{validation reconstruction loss} \\
         \bottomrule
     \end{tabular}
-    \caption{Autoencoder hyperparameters. $^\dagger$Baseline values fixed when the other architectural parameters are swept: $d_z \in \{32, 64, 128\}$, $K \in \{8, 16, 32\}$, $\gamma \in \{0.0, 0.001, 0.01\}$.}
+    \caption{Autoencoder hyperparameters (Phase 1), as set in \texttt{configs/model} and \texttt{configs/training/ae.yaml}. FiLM modulation is $x \mapsto x\,(1 + \tanh\alpha) + \delta$ at every convolutional stage, the $\tanh$ bounding the gain in $(0,2)$; the last convolution of each decoder head is zero-initialised. $^\dagger$Baseline values held fixed when the other architectural parameters are swept: $d_z \in \{32, 64, 128\}$, $K \in \{8, 16, 32\}$, $\gamma \in \{0, 0.001, 0.01\}$. $^\ddagger$The batching unit differs between families: a batch of $16$ groups $16$ (simulation, frequency) pairs for SLAE, which encodes frequency frames independently, against $16$ complete simulations for LLAE, which encodes the whole trajectory --- the two figures are therefore not comparable in memory or in gradient noise.}
     \label{tab:ae_hparams}
 \end{table}
 
-Table~\ref{tab:surr_hparams} summarises the hyperparameters used for surrogate training (Phase 2).
-
 \begin{table}[htbp]
     \centering
-    \renewcommand{\arraystretch}{1.3}
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.2}
     \begin{tabular}{llcc}
         \toprule
         \textbf{Group} & \textbf{Hyperparameter} & \textbf{SLAE} & \textbf{LLAE} \\
         \midrule
-        \multirow{4}{*}{Architecture (fixed)}
-          & Trunk layers $n_\text{trunk}$  & 4   & 4   \\
-          & Trunk hidden dim               & 512 & 512 \\
-          & Head layers $n_\text{head}$    & 2   & 2   \\
-          & Head hidden dim                & 256 & 256 \\
+        \multirow{5}{*}{Architecture (fixed)}
+          & Trunk layers $n_\text{trunk}$   & 4 & 4 \\
+          & Trunk hidden dim                & 512 & 512 \\
+          & Head layers $n_\text{head}$     & 2 & 2 \\
+          & Head hidden dim                 & 256 & 256 \\
+          & Frequency encoding levels       & \multicolumn{2}{c}{$L = 6$, raw $\sin/\cos$ (no MLP)} \\
         \midrule
         \multirow{4}{*}{Loss}
-          & Latent weight $\alpha_\text{lat}$  & 1.0 & 1.0 \\
+          & Latent weight $\alpha_\text{lat}$   & 1.0 & 1.0 \\
           & Spatial weight $\alpha_\text{spat}$ & 1.0 & 1.0 \\
-          & Tikhonov $\alpha_t$                & $7\times10^{-3}$ & $7\times10^{-3}$ \\
-          & Tikhonov $\lambda$                 & $3\times10^{-5}$ & $3\times10^{-5}$ \\
+          & Tikhonov $\alpha_t$                 & $7\times10^{-3}$ & $7\times10^{-3}$ \\
+          & Tikhonov $\lambda$                  & $3\times10^{-5}$ & $3\times10^{-5}$ \\
         \midrule
-        \multirow{6}{*}{Training}
-          & Epochs                        & 300  & 300  \\
-          & Batch size                    & 256  & 16   \\
-          & $lr_\text{surrogate}$         & $3\times10^{-4}$ & $3\times10^{-4}$ \\
-          & $lr_\text{decoder}$           & $5\times10^{-5}$ & $5\times10^{-5}$ \\
-          & Weight decay                  & $10^{-4}$ & $10^{-4}$ \\
-          & Early stopping patience       & 40   & 40   \\
+        \multirow{4}{*}{Trainable parts}
+          & Encoder                         & \multicolumn{2}{c}{frozen} \\
+          & Surrogate MLP                   & \multicolumn{2}{c}{$3\times10^{-4}$ direct, $5\times10^{-4}$ SVD/Tucker} \\
+          & Decoder (fine-tuned)            & \multicolumn{2}{c}{$lr = 5\times10^{-5}$} \\
+          & Poles $(s_k, \alpha_t, \lambda)$ & frozen & $10^{-5}$ if learnable \\
+        \midrule
+        \multirow{3}{*}{Compression variants}
+          & SVD rank $k_\text{svd}$         & \multicolumn{2}{c}{$\{8, 16, 32\}$, basis frozen} \\
+          & Tucker ranks $(r_s, r_z)$       & \multicolumn{2}{c}{$\{4,8,16\}\times\{8,16,32\}$, frozen} \\
+          & HOOI iterations                 & \multicolumn{2}{c}{5} \\
+        \midrule
+        \multirow{5}{*}{Training}
+          & Epochs (max)                    & 300 & 300 \\
+          & Batch size                      & 16 & 16 \\
+          & Weight decay                    & $10^{-4}$ & $10^{-4}$ \\
+          & Early stopping patience         & 40 & 40 \\
+          & Monitored quantity              & \multicolumn{2}{c}{validation relative $L^2$ error} \\
         \bottomrule
     \end{tabular}
-    \caption{Surrogate training hyperparameters (Phase 2). MLP architecture and training setup are fixed across all runs; one surrogate is trained per AE checkpoint (14 total, sweeping $d_z$, $K$, $\gamma$ as in Table~\ref{tab:ae_hparams}). The AE decoder is fine-tuned at $lr_\text{decoder}$ while the surrogate MLP is trained at $lr_\text{surrogate}$.}
+    \caption{Surrogate hyperparameters (Phase 2), as set in \texttt{configs/training/surrogate\_*.yaml}. One surrogate is trained per autoencoder checkpoint, inheriting its $d_z$, $K$ and contour. The encoder is frozen throughout; the decoder is fine-tuned at a reduced learning rate, and the SVD basis and Tucker factors, computed offline, are held fixed. The DL-ROM baseline uses this same table with $N_t = 150$ per-time-step heads in place of the $K$ frequency heads.}
     \label{tab:surr_hparams}
 \end{table}
-
-
 
 \clearpage
 \section{Derivations for the Bias--Amplification Contour Optimization}
 \label{app:bv_proof}
+
+Throughout this appendix, $\bm{F} \in \C^{K_{\mathrm{full}} \times N_t}$ and the coefficient vectors are those assembled on the conjugate-symmetric set $\mathcal{S}$ of \eqref{eq:sfull}, as in Sections~\ref{sec:tikhonov} and~\ref{sec:contour_optim}; on $\mathcal{S}$ the matrix $\bm{F}^H\bm{F}$ and the vector $\bm{F}^H\hat{\bm{u}}$ are real, so the operator $\Re(\cdot)$ below may be read as an identity and is kept only for uniformity with \eqref{eq:normal}.
 
 \begin{proposition}[Invertibility of $\bm{A}$]
 Since $\lambda > 0$ and $\bm{D}_t^T\bm{D}_t$ is positive semi-definite, $\bm{L}_{\mathrm{reg}} = \alpha_t\bm{D}_t^T\bm{D}_t + \lambda\bm{I}$ is positive definite ($\bm{L}_{\mathrm{reg}} \succeq \lambda\bm{I}$). Thus $\bm{A} = \Re(\bm{F}^H\bm{F}) + \bm{L}_{\mathrm{reg}}$ is symmetric positive definite and hence invertible. The unique reconstructed solution is $\bm{u}^*(\vmu) = \bm{A}^{-1}\Re(\bm{F}^H\hat{\bm{u}}(\vmu))$.
@@ -1666,18 +1799,22 @@ The first term equals $\|\bm{A}^{-1}\bm{L}_{\mathrm{reg}}\bm{u}(\vmu)\|$ by \eqr
 Applying sub-multiplicativity of the operator norm and $\|\Re(M)\| \leq \|M\|$ yields:
 \[
     \|\bm{u}^*(\vmu) - \bm{u}_{\mathrm{rec}}(\vmu)\|
-    \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^K},
+    \leq \|\bm{A}^{-1}\bm{F}^H\| \cdot \|\hat{\bm{u}}(\vmu) - \tilde{\bm{u}}(\vmu)\|_{\C^{K_{\mathrm{full}}}},
 \]
 which gives \eqref{eq:bv_bound}. \hfill$\square$
 
+\emph{On the norm used in practice.} The derivation above uses the operator $2$-norm, for which sub-multiplicativity holds. The implementation evaluates the amplification factor as the Frobenius norm of the real $2N_t \times K_{\mathrm{full}}$ stack $[\bm{A}^{-1}\Re(\bm{F}^H);\, \bm{A}^{-1}\Im(\bm{F}^H)]$, which is exactly $\|\bm{A}^{-1}\bm{F}^H\|_F$. Since $\|\cdot\|_2 \le \|\cdot\|_F$, substituting it in \eqref{eq:bv_bound} and in the proxy \eqref{eq:proxy} preserves the inequality; it is preferred because it is a smooth function of every entry, hence better behaved under gradient descent than the largest singular value.
+
 \begin{proposition}[SVD residual as a floor for the \emph{optimal} autoencoder]
-Let $\mathcal{H}_{d_z}$ be the class of encoder--decoder pairs with bottleneck dimension $d_z$ realizable by the chosen architecture, and let
-$\epsilon^\star_{\mathrm{AE}}(s_k) = \inf_{\mathcal{H}_{d_z}} \epsilon(s_k)$ be the infimum of the reconstruction error over that class. If $\mathcal{H}_{d_z}$ contains all linear encoder--decoder pairs of the same bottleneck dimension, then $\epsilon^\star_{\mathrm{AE}}(s_k) \leq \mathcal{E}_{\mathrm{SVD}}(s_k)$.
+Let $\mathcal{H}_{d_z}$ be the class of encoder--decoder pairs with bottleneck dimension $d_z$ realizable by the chosen architecture and acting on the stacked space--frequency representation $\bm{a}(\vmu) \in \R^{2N_xK}$, and let
+$\epsilon^\star_{\mathrm{AE}} = \inf_{\mathcal{H}_{d_z}} \epsilon$ be the infimum of the reconstruction error over that class. If $\mathcal{H}_{d_z}$ contains all linear encoder--decoder pairs of the same bottleneck dimension, then $\epsilon^\star_{\mathrm{AE}} \leq \mathcal{E}_{\mathrm{SVD}}$.
 \end{proposition}
 
-\textit{Derivation.} A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection~\cite{baldi1989}, whose error is $\mathcal{E}_{\mathrm{SVD}}(s_k)$ by definition. A nonlinear autoencoder with the same bottleneck optimizes over a class containing all such linear pairs, so its infimum is no larger. \hfill$\square$
+\textit{Derivation.} A linear autoencoder with bottleneck dimension $d_z$ minimizing the mean squared reconstruction error recovers exactly the truncated SVD projection~\cite{baldi1989}, whose error is $\mathcal{E}_{\mathrm{SVD}}$ by definition. A nonlinear autoencoder with the same bottleneck optimizes over a class containing all such linear pairs, so its infimum is no larger. \hfill$\square$
 
-\emph{Scope of the statement.} The inequality bounds the \emph{optimum} over the hypothesis class, under exact global minimisation and unlimited data. It says nothing about the error of a network actually trained by stochastic gradient descent for a finite number of epochs under a particular loss, which is what Table~\ref{tab:ae_results} measures --- and which is not bounded by $\mathcal{E}_{\mathrm{SVD}}$: SLAE exceeds the linear floor in four of its seven configurations (up to $+0.94$\,pp). Two effects that the proposition explicitly excludes account for this. SLAE is trained on a Laplace-domain objective that is not the physical-field error being reported, so the quantity it minimises is not the quantity the comparison scores; and the attained optimum is a local one. The proposition is used in Section~\ref{sec:contour_optim} only as a computable, deterministic \emph{proxy} whose \emph{variation} with the contour tracks that of the surrogate error, not as a guarantee on any trained model; the scaling factor $\lambda_{\mathrm{AE}}$ introduced there absorbs the residual mismatch in level.
+\emph{Which class is bounded.} The hypothesis class here compresses the \emph{whole} space--frequency field of a simulation into $d_z$ coefficients, whereas SLAE compresses each of the $K$ frequency frames into $d_z$ coefficients separately, and thus disposes of $K d_z$ in total. The proposition therefore does not bound SLAE's attainable error; $\mathcal{E}_{\mathrm{SVD}}$ is the floor of a strictly more constrained reduction, and is used in \eqref{eq:proxy} only as a contour-dependent scalar whose variation is expected to track that of the surrogate error. The per-frequency variant $\sum_k \mathcal{E}_{\mathrm{SVD}}(s_k)^2$, which would bound SLAE's class proper, is the natural alternative and was not the one used here.
+
+\emph{Scope of the statement.} The inequality bounds the \emph{optimum} over the hypothesis class, under exact global minimisation and unlimited data. It says nothing about the error of a network actually trained by stochastic gradient descent for a finite number of epochs under a particular loss, which is what Table~\ref{tab:ae_results} measures --- and which is bounded by no linear residual: SLAE exceeds the linear reconstruction floor of Section~\ref{sec:pod_results} in four of its seven configurations (up to $+0.94$\,pp). Two effects that the proposition explicitly excludes account for this. SLAE is trained on a Laplace-domain objective that is not the physical-field error being reported, so the quantity it minimises is not the quantity the comparison scores; and the attained optimum is a local one. The proposition is used in Section~\ref{sec:contour_optim} only as a computable, deterministic \emph{proxy} whose \emph{variation} with the contour tracks that of the surrogate error, not as a guarantee on any trained model; the scaling factor $\lambda_{\mathrm{AE}}$ introduced there absorbs the residual mismatch in level.
 
 \end{appendices}
 
