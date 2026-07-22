@@ -1,0 +1,69 @@
+# paper.mplstyle — style unique pour toutes les figures de l'article.
+# Chargé par figstyle.setup(). Ne pas éditer les rcParams dans les notebooks :
+# tout changement global se fait ici, sinon le style redérive entre notebooks.
+
+# ── Polices ───────────────────────────────────────────────────────────────────
+# L'article compose en New Century Schoolbook (\usepackage{newcent}) ; on prend
+# le clone URW s'il est installé, sinon un serif générique.
+font.family         : serif
+font.serif          : Century Schoolbook L, C059, TeX Gyre Schola, DejaVu Serif
+mathtext.fontset    : dejavuserif
+
+font.size           : 9
+axes.labelsize      : 9
+axes.titlesize      : 9
+xtick.labelsize     : 8
+ytick.labelsize     : 8
+legend.fontsize     : 8
+figure.titlesize    : 10
+
+# ── Géométrie ─────────────────────────────────────────────────────────────────
+# 6.7 in = 17 cm = \textwidth pour a4paper + margin=2cm. Sauver à cette largeur
+# et inclure avec width=\textwidth donne un facteur d'échelle de 1 : les tailles
+# de police ci-dessus sont donc celles vues sur la page.
+figure.figsize      : 6.7, 2.6
+figure.dpi          : 110
+# Les notebooks appellent tight_layout() 29 fois ; constrained_layout serait
+# incompatible et ferait warner chaque cellule. On laisse tight_layout gerer.
+figure.constrained_layout.use : False
+
+# ── Axes ──────────────────────────────────────────────────────────────────────
+axes.spines.top     : False
+axes.spines.right   : False
+axes.linewidth      : 0.7
+axes.grid           : True
+axes.axisbelow      : True
+grid.linewidth      : 0.5
+grid.alpha          : 0.30
+grid.linestyle      : -
+
+xtick.direction     : out
+ytick.direction     : out
+xtick.major.width   : 0.7
+ytick.major.width   : 0.7
+xtick.major.size    : 3
+ytick.major.size    : 3
+
+# ── Traits et marqueurs ───────────────────────────────────────────────────────
+lines.linewidth     : 1.4
+lines.markersize    : 6
+lines.markeredgewidth : 0.8
+patch.linewidth     : 0.7
+errorbar.capsize    : 2.5
+
+# ── Légende ───────────────────────────────────────────────────────────────────
+legend.frameon      : False
+legend.handlelength : 1.6
+legend.borderaxespad: 0.4
+legend.columnspacing: 1.2
+
+# ── Sortie ────────────────────────────────────────────────────────────────────
+# fonttype 42 = TrueType embarquée : exigé par la plupart des éditeurs, et rend
+# le texte des figures sélectionnable/rééditable dans le PDF final.
+pdf.fonttype        : 42
+ps.fonttype         : 42
+savefig.format      : pdf
+savefig.bbox        : tight
+savefig.pad_inches  : 0.02
+savefig.transparent : False
+savefig.dpi         : 300

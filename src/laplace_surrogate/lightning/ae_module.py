@@ -44,6 +44,11 @@ class AELightningModule(pl.LightningModule):
                 learnable_laplace=self.cfg.model.learnable_laplace,
                 alpha_t=float(self.cfg.model.alpha_t),
                 lam=float(self.cfg.model.lam),
+                # Les LLAE entraînés avant le passage à GroupNorm portent des
+                # buffers BatchNorm ; sans cette clé leur chargement échoue sur
+                # des « unexpected keys ». InferencePipelineAE la renseigne
+                # d'après les poids (cf. _decoder_norm_from_ckpt).
+                decoder_norm=self.cfg.model.get('decoder_norm', 'gn'),
             )
         else:
             raise ValueError(f"Modèle AE inconnu : {name!r}. Attendu : slae | llae")

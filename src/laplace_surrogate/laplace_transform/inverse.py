@@ -52,14 +52,26 @@ def laplace_inverse_tik(U_hat, s_list, dt, Nt, alpha_t, lam, rule='trap'):
 
     # F_full[k, t] = dt * w[t] * exp(-s_full[k] * t)   (K_full, Nt)
     F_full = dt * w[None, :] * torch.exp(-s_full[:, None] * t[None, :])
-    FH     = torch.conj(F_full).T                           # (Nt, K_full)
-    FtF    = torch.real(FH @ F_full)                        # (Nt, Nt) rdtype
 
-    Dt    = (torch.diag(torch.ones(Nt - 1, dtype=rdtype, device=device), 1)
-             - torch.eye(Nt, dtype=rdtype, device=device))[:Nt - 1, :]
+    # Les equations normales sont assemblees et resolues en float64, quelle que soit
+    # la precision demandee. A K=16 les poles se resserrent, les colonnes de F_full
+    # deviennent quasi colineaires et κ(A) depasse le plafond du float32 (~1e7) : la
+    # resolution renvoie alors des valeurs sans rapport avec la solution (erreur x1000
+    # sur les contours a ridge quasi nul, lam=1e-6). Le float64 (~1e15) absorbe la
+    # marge pour un cout negligeable — A est Nt×Nt, soit 150×150 — et c'est deja ce
+    # que fait LearnableLaplace pour LLAE (voir learnable.py, _build_inv_matrices).
+    # Les produits couteux, eux, restent dans la precision demandee : ils portent sur
+    # la dimension des noeuds (N² = 16384) et sont bien conditionnes.
+    F64 = F_full.to(torch.complex128)
+    FtF = torch.real(torch.conj(F64).T @ F64)               # (Nt, Nt) float64
+
+    Dt    = (torch.diag(torch.ones(Nt - 1, dtype=torch.float64, device=device), 1)
+             - torch.eye(Nt, dtype=torch.float64, device=device))[:Nt - 1, :]
     DtTDt = Dt.T @ Dt
 
-    A   = FtF + alpha_t * DtTDt + lam * torch.eye(Nt, dtype=rdtype, device=device)
-    RHS = torch.real(U_hat_full @ torch.conj(F_full))       # (Nnodes, Nt)
+    A   = (FtF + alpha_t * DtTDt
+           + lam * torch.eye(Nt, dtype=torch.float64, device=device))
+    RHS = torch.real(U_hat_full @ torch.conj(F_full))       # (Nnodes, Nt) rdtype
 
-    return torch.linalg.solve(A, RHS.T).T                   # (Nnodes, Nt) rdtype
+    V = torch.linalg.solve(A, RHS.to(torch.float64).T).T
+    return V.to(rdtype)                                     # (Nnodes, Nt) rdtype
