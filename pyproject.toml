@@ -24,8 +24,6 @@ remote-control = [
     "paramiko>=5.0.0",
     "rich>=15.0.0",
 ]
-
-[dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
     "nbconvert>=7.17.1",
