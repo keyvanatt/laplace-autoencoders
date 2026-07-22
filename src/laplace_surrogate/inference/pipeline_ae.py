@@ -62,8 +62,21 @@ class InferencePipelineAE:
         elif isinstance(device, str):
             device = torch.device(device)
 
+        # La normalisation du décodeur n'est pas dans la config des anciens
+        # checkpoints : on la déduit des poids, comme le fait déjà le pipeline
+        # surrogate (_decoder_norm_from_ckpt). Sans cela, un LLAE entraîné avec
+        # BatchNorm est reconstruit en GroupNorm et le chargement échoue.
+        from laplace_surrogate.inference.pipeline import _decoder_norm_from_ckpt
+        from omegaconf import OmegaConf, open_dict
+
+        _probe = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+        _cfg = OmegaConf.create(_probe['hyper_parameters']['cfg'])
+        with open_dict(_cfg):
+            _cfg.model.decoder_norm = _decoder_norm_from_ckpt(_probe)
+        del _probe
+
         module = AELightningModule.load_from_checkpoint(
-            ckpt_path, map_location=device, weights_only=False
+            ckpt_path, map_location=device, weights_only=False, cfg=_cfg
         )
         module.eval()
         cfg        = module.cfg
@@ -190,6 +203,13 @@ class InferencePipelineAE:
         # CONJOINTEMENT avec (alpha_t, lam), stockés dans optimal_laplace_path.
         # Les réutiliser : sinon on inverse un contour taillé pour un ridge lourd
         # avec un ridge quasi nul → système mal conditionné → erreur explosée.
+        # La phase 1 de SLAE est entierement dans le domaine de Laplace et n'inverse
+        # jamais : le checkpoint AE ne porte aucun (alpha_t, lam). L'inversion
+        # n'apparait qu'ici, a l'evaluation, et le choix appartient donc a l'appelant —
+        # les notebooks d'evaluation le posent explicitement en ecrivant cfg.model.alpha_t
+        # et cfg.model.lam sur le pipeline. Les valeurs ci-dessous ne sont qu'un repli
+        # pour un appel qui n'aurait rien precise ; elles laissent l'inversion quasi nue
+        # et ne correspondent a aucun regime utilise dans l'etude.
         alpha_t = float(getattr(cfg.model, 'alpha_t', 0.0))
         lam     = float(getattr(cfg.model, 'lam',     1e-6))
         if getattr(cfg.model, 'optimal_laplace', False):
@@ -203,43 +223,45 @@ class InferencePipelineAE:
                     f"optimal_laplace=True mais optimal_laplace_path introuvable "
                     f"({opt_path!r}) — inversion avec alpha_t={alpha_t}, lam={lam}."
                 )
-        s_t     = torch.tensor(self._s_list, dtype=torch.complex128)
-        freq_ratios = [k / max(K - 1, 1) for k in range(K)]
+        # Tout le chemin en complex64 sur GPU, comme le surrogate (pipeline.py) et
+        # comme LLAE, dont la transformee est interne au modele. Deux choses le
+        # permettent : laplace_inverse_tik assemble et resout desormais les equations
+        # normales en float64 quelle que soit la precision demandee — c'est la seule
+        # etape mal conditionnee, et elle porte sur une matrice Nt×Nt — et l'inversion
+        # utilise le ridge reel (7e-3, 3e-5) au lieu du repli quasi nul qui la mettait
+        # au bord de la singularite. Les produits couteux, sur la dimension des noeuds,
+        # restent en simple precision.
+        s_t = torch.tensor(self._s_list, dtype=torch.complex64, device=self.device)
+        fr  = torch.tensor([k / max(K - 1, 1) for k in range(K)],
+                           dtype=torch.float32, device=self.device)
+        lap_mean = torch.as_tensor(ds.lap_mean, dtype=torch.float32, device=self.device)
+        lap_std  = torch.as_tensor(ds.lap_std,  dtype=torch.float32, device=self.device)
 
         U_out = np.empty((B, Nt, N, N), dtype=np.float32)
 
         for b in range(B):
             # Forward Laplace : (N², Nt) → (N², K) complex
-            u_flat = torch.tensor(
-                U_raw[b].reshape(Nt, N * N).T, dtype=torch.float64
-            )
-            uhat    = laplace_forward_tik(u_flat, s_t, dt, rule)   # (N², K)
-            uhat_np = uhat.numpy().reshape(N, N, K)                 # (N, N, K)
+            u_flat = torch.as_tensor(U_raw[b].reshape(Nt, N * N).T,
+                                     dtype=torch.float32, device=self.device)
+            uhat   = laplace_forward_tik(u_flat, s_t, dt, rule)     # (N², K)
 
-            frames = np.empty((K, 2, N, N), dtype=np.float32)
-            frames[:, 0] = uhat_np.real.transpose(2, 0, 1)
-            frames[:, 1] = uhat_np.imag.transpose(2, 0, 1)
+            u3     = uhat.reshape(N, N, K)
+            frames = torch.stack([u3.real.permute(2, 0, 1),
+                                  u3.imag.permute(2, 0, 1)], dim=1)  # (K, 2, N, N)
 
-            # Normaliser dans le domaine de Laplace
-            frames_norm = (frames - ds.lap_mean) / ds.lap_std
+            # Encoder / decoder les K frequences en un seul batch. Le decodeur est en
+            # eval(), sa BatchNorm lit ses statistiques courantes : le resultat ne
+            # depend pas de la taille du batch.
+            with torch.no_grad():
+                y, _ = self.model((frames - lap_mean) / lap_std, fr)
+            rec = y * lap_std + lap_mean
 
-            # Encoder / décoder chaque fréquence
-            rec_norm = np.empty_like(frames_norm)
-            for k in range(K):
-                x  = torch.from_numpy(frames_norm[k]).float().unsqueeze(0).to(self.device)
-                fr = torch.tensor(freq_ratios[k], dtype=torch.float32)
-                y, _ = self.model(x, fr)
-                rec_norm[k] = y.squeeze(0).cpu().numpy()
-
-            # Dénormaliser
-            rec = rec_norm * ds.lap_std + ds.lap_mean
-
-            # Reconstruire le complexe : (K, 2, N, N) → (N², K)
-            uhat_rec   = (rec[:, 0] + 1j * rec[:, 1]).transpose(1, 2, 0).reshape(N * N, K)
-            uhat_rec_t = torch.tensor(uhat_rec, dtype=torch.complex128)
+            # (K, 2, N, N) → (N², K) complexe
+            uhat_rec_t = torch.complex(rec[:, 0], rec[:, 1]) \
+                              .permute(1, 2, 0).reshape(N * N, K).to(torch.complex64)
 
             # Inverse Laplace : (N², K) → (N², Nt)
             u_rec    = laplace_inverse_tik(uhat_rec_t, s_t, dt, Nt, alpha_t, lam, rule)
-            U_out[b] = u_rec.float().numpy().T.reshape(Nt, N, N)
+            U_out[b] = u_rec.float().cpu().numpy().T.reshape(Nt, N, N)
 
         return U_out

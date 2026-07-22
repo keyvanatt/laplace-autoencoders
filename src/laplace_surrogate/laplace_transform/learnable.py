@@ -72,7 +72,7 @@ class LearnableLaplace(nn.Module):
                             rescale_reg: bool = True):
         # Nt/dt permettent de reconstruire z(t) sur une grille arbitraire. Par défaut on
         # utilise la grille d'entraînement (self.Nt, self.dt). Pour un Nt différent, dt est
-        # rééchantillonné de façon à conserver l'horizon physique T = (Nt-1)·dt.
+        # rééchantillonné sur la grille arange(Nt)·dt_out, dt_out = Nt_train·dt/Nt.
         Nt = self.Nt if Nt is None else Nt
         dt = self.dt if dt is None else dt
 
@@ -174,7 +174,8 @@ class LearnableLaplace(nn.Module):
 
         Nt fixe le nombre de frames temporelles reconstruites. Nt == self.Nt reprend la
         grille d'entraînement (matrices en cache) ; un Nt différent rééchantillonne z(t)
-        sur Nt points en conservant l'horizon physique T = (self.Nt-1)·self.dt.
+        sur Nt points de pas dt_out = self.Nt·self.dt/Nt, soit exactement le
+        sous-échantillonnage U[::self.Nt//Nt] quand Nt divise self.Nt.
 
         rescale_reg (défaut True) : recalibre α_t ~ 1/dt et λ ~ dt sur la nouvelle grille
         pour préserver la fonctionnelle continue (reconstruction cohérente entre grilles).
@@ -186,7 +187,13 @@ class LearnableLaplace(nn.Module):
         if Nt == self.Nt:
             s_full, F_full, L, c_mask = self._get_inv_matrices(device)
         else:
-            dt_out = self.dt * (self.Nt - 1) / max(Nt - 1, 1)
+            # Grille de sortie : pas dt_out = Nt_train*dt_train / Nt, de sorte que
+            # les temps emis soient arange(Nt)*dt_out. Pour un Nt qui divise
+            # Nt_train, ils coincident exactement avec le sous-echantillonnage
+            # U[::Nt_train//Nt] du jeu de donnees, et la comparaison a une
+            # resolution reduite ne demande aucune interpolation. A Nt == self.Nt
+            # on retrouve dt_out == self.dt, donc la grille d'entrainement.
+            dt_out = self.dt * self.Nt / Nt
             s_full, F_full, L, c_mask = self._build_inv_matrices(
                 device, Nt=Nt, dt=dt_out, rescale_reg=rescale_reg)
 
