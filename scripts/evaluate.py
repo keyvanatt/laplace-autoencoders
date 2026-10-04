@@ -2,7 +2,7 @@
 evaluate.py — Évaluation d'un surrogate sur le test set.
 
 Usage :
-    PYTHONPATH=src python scripts/evaluate.py eval.ckpt_path=checkpoints/SLAEModel__slae_ld64_K16_g0.0__t4h2.pt
+    PYTHONPATH=src python scripts/evaluate.py eval.ckpt_path=checkpoints/LLAEModel__llae_ld64_K16_g0.01__t4h2.ckpt
     PYTHONPATH=src python scripts/evaluate.py eval.ckpt_path=checkpoints/CorrectionAE__SLAEModel__slae_ld64_K16_g0.0__t4h2__ch16.pt eval.n_gifs=5
 """
 import sys

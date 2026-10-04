@@ -1,7 +1,7 @@
 [project]
-name = "diffusion-ae"
+name = "laplace-autoencoders"
 version = "0.1.0"
-description = "Add your description here"
+description = "Laplace-domain autoencoders for parametric space-time surrogates of parabolic problems"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
