@@ -48,7 +48,7 @@ def rotate_dataset(
         output_size: Final spatial resolution after center-cropping.
     """
     ch4 = np.load(os.path.join(input_dir, "CH4.npy"))   # (N, T, H, W)
-    doe = np.load(os.path.join("dataset/", "doe.npy"))    # structured: (N,) with fields k, A, C
+    doe = np.load(os.path.join(input_dir, "doe.npy"))    # structured: (N,) with fields k, A, C
 
     N, T, H, W = ch4.shape
     assert H == 200 and W == 200, f"Expected 200x200 input, got {H}x{W}"
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",  default="dataset")
-    parser.add_argument("--output_dir", default="/Data/KAT")
+    parser.add_argument("--output_dir", default="dataset")
     parser.add_argument("--n_rotations", type=int, default=36)
     parser.add_argument("--n_jobs",      type=int, default=8)
     parser.add_argument("--output_size", type=int, default=128)
