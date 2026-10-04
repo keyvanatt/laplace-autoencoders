@@ -4,6 +4,7 @@ wandb
 notebooks/cache*
 remote/
 .*/
+!.github/
 
 # Checkpoints are stored on Hugging Face, not in git
 # Download: hf download keyvanatt/laplace-autoencoders-checkpoints --local-dir checkpoints
@@ -26,3 +27,16 @@ dataset/mnist
 *.nav
 *.snm
 *.vrb
+# Personal documents — not part of the code release
+article/
+rapport de stage/
+soutenance/
+
+# Data: obtained separately (see dataset/README.md); only small index files are tracked
+dataset/*
+!dataset/README.md
+!dataset/doe.npy
+!dataset/split.npz
+
+# Evaluation outputs
+plots/
