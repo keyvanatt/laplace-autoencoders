@@ -39,8 +39,13 @@ All commands below are run from the repository root with `PYTHONPATH=src`
 
 ## Data and checkpoints
 
-- **Dataset** — the simulation data is not distributed with the repository; see
-  [dataset/README.md](dataset/README.md) for the expected files and layout.
+- **Dataset** — the simulation data is on the Hugging Face Hub (access on request):
+  [keyvanatt/laplace-autoencoders-dataset](https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset).
+  See [dataset/README.md](dataset/README.md) for the files and layout.
+
+  ```bash
+  hf download keyvanatt/laplace-autoencoders-dataset --repo-type dataset --local-dir dataset
+  ```
 - **Trained checkpoints** (AEs and surrogates for every configuration in the paper) are on the
   Hugging Face Hub: [keyvanatt/laplace-autoencoders-checkpoints](https://huggingface.co/keyvanatt/laplace-autoencoders-checkpoints).
 

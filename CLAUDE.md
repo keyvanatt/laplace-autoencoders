@@ -27,6 +27,11 @@ hf upload keyvanatt/laplace-autoencoders-checkpoints checkpoints/<file>.ckpt <fi
 hf upload-large-folder keyvanatt/laplace-autoencoders-checkpoints checkpoints/ --repo-type model
 ```
 
+The raw dataset (`CH4.npy`, `doe.npy`, `split.npz`) is a private HF dataset:
+https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset
+(`hf download keyvanatt/laplace-autoencoders-dataset --repo-type dataset --local-dir dataset`,
+then regenerate the rotated files with `python -m laplace_surrogate.utils.rotate`).
+
 Never `git add checkpoints/` — it is ignored on purpose to keep the git history small.
 
 ## Repository Layout

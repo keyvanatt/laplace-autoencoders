@@ -1,7 +1,11 @@
 # Dataset
 
-The simulation data is not distributed with this repository (several tens of GB).
-Contact the authors to obtain it.
+The simulation data is not stored in git. It is on the Hugging Face Hub (access on request):
+[keyvanatt/laplace-autoencoders-dataset](https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset).
+
+```bash
+hf download keyvanatt/laplace-autoencoders-dataset --repo-type dataset --local-dir dataset
+```
 
 Files expected in this directory (symbolic links to a scratch disk work fine):
 
