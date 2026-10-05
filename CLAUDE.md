@@ -27,7 +27,7 @@ hf upload keyvanatt/laplace-autoencoders-checkpoints checkpoints/<file>.ckpt <fi
 hf upload-large-folder keyvanatt/laplace-autoencoders-checkpoints checkpoints/ --repo-type model
 ```
 
-The raw dataset (`CH4.npy`, `doe.npy`, `split.npz`) is a private HF dataset:
+The raw dataset (`CH4.npy`, `doe.npy`, `split.npz`) is a public HF dataset (CC BY-NC 4.0):
 https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset
 (`hf download keyvanatt/laplace-autoencoders-dataset --repo-type dataset --local-dir dataset`,
 then regenerate the rotated files with `python -m laplace_surrogate.utils.rotate`).

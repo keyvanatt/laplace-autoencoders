@@ -39,7 +39,7 @@ All commands below are run from the repository root with `PYTHONPATH=src`
 
 ## Data and checkpoints
 
-- **Dataset** — the simulation data is on the Hugging Face Hub (access on request):
+- **Dataset** — the simulation data is on the Hugging Face Hub (CC BY-NC 4.0):
   [keyvanatt/laplace-autoencoders-dataset](https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset).
   See [dataset/README.md](dataset/README.md) for the files and layout.
 
