@@ -1,5 +1,7 @@
 # Dataset
 
+Transient CH₄ concentration fields simulated with [OpenFOAM](https://www.openfoam.com/).
+
 The simulation data is not stored in git. It is on the Hugging Face Hub (access on request):
 [keyvanatt/laplace-autoencoders-dataset](https://huggingface.co/datasets/keyvanatt/laplace-autoencoders-dataset).
 
